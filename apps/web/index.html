@@ -3,190 +3,285 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Meeting2Action 看板</title>
+    <title>会易达 OS - 研发团队AI项目OS</title>
     <link rel="stylesheet" href="./src/styles.css" />
     <script defer src="./dist/main.js"></script>
+    <script defer>
+      document.addEventListener('DOMContentLoaded', () => {
+        const tabs = document.querySelectorAll('.nav-tab');
+        const views = document.querySelectorAll('.view-container');
+        tabs.forEach(tab => {
+          tab.addEventListener('click', () => {
+            tabs.forEach(t => t.classList.remove('active'));
+            views.forEach(v => v.classList.remove('active'));
+            tab.classList.add('active');
+            const targetId = tab.getAttribute('data-target');
+            document.getElementById(targetId).classList.add('active');
+          });
+        });
+        const detailObserver = new MutationObserver(() => {
+          const detailContent = document.getElementById('task-detail');
+          if (detailContent && !detailContent.classList.contains('empty-state')) {
+            document.getElementById('task-drawer').classList.add('open');
+          }
+        });
+        const dTarget = document.getElementById('task-detail');
+        if (dTarget) { detailObserver.observe(dTarget, { childList: true, subtree: true }); }
+
+      });
+      function closeDrawer() { document.getElementById('task-drawer').classList.remove('open'); }
+      function closeDashboardTaskDetail() {
+        document.querySelectorAll('.urgent-task-item').forEach(c => c.classList.remove('active'));
+        document.getElementById('dashboard-activity-feed').style.display = 'block';
+        document.getElementById('dashboard-task-detail').style.display = 'none';
+      }
+      function toggleUserDropdown(e) {
+        e.stopPropagation();
+        const menu = document.getElementById('user-dropdown-menu');
+        const badge = document.getElementById('nav-user-badge');
+        if (menu) {
+          menu.classList.toggle('open');
+        }
+        if (badge) {
+          badge.classList.toggle('open');
+        }
+      }
+      document.addEventListener('click', (e) => {
+        document.querySelectorAll('.user-dropdown').forEach((el) => {
+          el.classList.remove('open');
+        });
+        document.querySelectorAll('.current-user-badge').forEach((el) => {
+          el.classList.remove('open');
+        });
+      });
+    </script>
   </head>
   <body>
-    <div class="page-shell">
-      <header class="hero">
-        <div>
-          <p class="eyebrow">Meeting2Action</p>
-          <h1>任务看板</h1>
-          <p class="hero-copy">查看 AI 生成任务、切换任务状态，并直接读取实验室当前推进节奏。</p>
+    <nav class="glass-nav">
+      <div class="nav-brand">
+        <div class="nav-brand-logo"></div>
+        会易达 OS
+      </div>
+      <div class="nav-tabs">
+        <button class="nav-tab active" data-target="view-dashboard">📊 概览控制台</button>
+        <button class="nav-tab" data-target="view-inbox">📥 智能解析舱</button>
+        <button class="nav-tab" data-target="view-workspace">🗂️ 研发工作台</button>
+        <button class="nav-tab" data-target="view-hub">👥 资源中心</button>
+      </div>
+      <div class="user-menu-container">
+        <div class="current-user-badge" id="nav-user-badge" onclick="toggleUserDropdown(event)">
+          <div class="user-avatar" id="nav-user-avatar" style="background:#5AC8FA;color:white;">马</div>
+          <span id="nav-user-name">马瑀阔（博士三年级）</span>
+          <span class="dropdown-icon">▼</span>
         </div>
-        <div class="hero-actions">
-          <button id="refresh-board" class="secondary-button">刷新看板</button>
-        </div>
-      </header>
-
-      <section id="stats-panel" class="stats-grid"></section>
-
-      <section class="filter-card">
-        <div class="section-heading compact-heading">
-          <div>
-            <p class="eyebrow">Board Filter</p>
-            <h2>任务筛选与风险视图</h2>
+        <div class="user-dropdown" id="user-dropdown-menu">
+          <div class="dropdown-header">切换团队成员</div>
+          <div id="dropdown-user-list">
+            <div class="dropdown-header" style="margin: 0; border: none; text-transform: none; letter-spacing: 0;">加载成员中...</div>
           </div>
-          <button id="reset-filters" class="secondary-button">重置筛选</button>
         </div>
-        <div class="filter-grid">
-          <label>
-            <span>状态</span>
-            <select id="status-filter">
-              <option value="all">全部状态</option>
-              <option value="todo">todo</option>
-              <option value="doing">doing</option>
-              <option value="done">done</option>
-            </select>
-          </label>
-          <label>
-            <span>负责人</span>
-            <select id="owner-filter">
-              <option value="all">全部负责人</option>
-            </select>
-          </label>
-          <label>
-            <span>风险</span>
-            <select id="risk-filter">
-              <option value="all">全部任务</option>
-              <option value="overdue">仅看逾期</option>
-              <option value="dueSoon">仅看即将到期</option>
-              <option value="highPriority">仅看高优先级</option>
-            </select>
-          </label>
-        </div>
-      </section>
+      </div>
+    </nav>
 
-      <main class="board-layout">
-        <section class="board-section">
-          <section class="import-section">
-            <div class="import-card">
-              <div class="section-heading">
-                <div>
-                  <p class="eyebrow">Import Review</p>
-                  <h2>任务导入确认</h2>
-                </div>
-                <div class="import-actions">
-                  <button id="load-sample" class="secondary-button">载入示例</button>
-                  <button id="preview-import" class="secondary-button">解析预览</button>
-                  <button id="submit-import" class="primary-button">确认导入</button>
-                </div>
-              </div>
+    <!-- 视图 0：概览控制台 -->
+    <main id="view-dashboard" class="view-container active">
+      <div class="dashboard-layout">
+        <header class="welcome-header">
+          <h1 class="welcome-title" id="dashboard-welcome">上午好，马瑀阔。</h1>
+          <p class="welcome-subtitle">本周团队整体进度稳健，目前看板统计数据如下，请关注风险项。</p>
+          <div class="ai-insight">✨ AI 洞察：对比上周，组会 Action Items 落地率提升了 15%。</div>
+        </header>
 
-              <div class="import-meta-grid">
-                <label>
-                  <span>会议 ID</span>
-                  <input id="meeting-id-input" type="text" value="meeting_001" />
-                </label>
-                <label>
-                  <span>操作人</span>
-                  <input id="operator-name-input" type="text" value="蒙亚舟" />
-                </label>
-              </div>
-
-              <label class="import-json-field">
-                <span>ActionItems JSON</span>
-                <textarea id="import-json" rows="10" placeholder="粘贴模块 2 输出的 ActionItems JSON"></textarea>
-              </label>
-
-              <div id="import-feedback" class="import-feedback empty-state">载入示例或粘贴 JSON 后，点击“解析预览”。</div>
-              <div id="import-preview" class="import-preview empty-state">暂无待确认任务。</div>
+        <div class="dashboard-grid">
+          <!-- 左侧：我的待办任务 -->
+          <div class="card-base" style="align-self: start;">
+            <div class="dash-section-title">
+              <h3>🚨 我的待办任务</h3>
+              <button class="apple-secondary-btn small-btn" onclick="document.querySelector('[data-target=\'view-workspace\']').click()">前往工作台</button>
             </div>
-          </section>
-
-          <div id="board-columns" class="board-columns"></div>
-        </section>
-        <aside class="detail-section">
-          <div class="detail-card">
-            <div class="detail-header">
-              <p class="eyebrow">Task Detail</p>
-              <h2>任务详情</h2>
+            <div class="urgent-tasks-list" id="dashboard-todo-list">
+              <!-- 动态注入待办 -->
             </div>
-            <div id="task-detail" class="detail-content empty-state">
-              点击左侧任务卡片，查看详细信息与活动记录。
+            <div id="stats-panel" style="display:none;"></div>
+          </div>
+          <!-- 右侧：实验室动态 或 任务详情 -->
+          <div class="card-base" style="position: relative; overflow: hidden; align-self: start;">
+            <div id="dashboard-activity-feed">
+              <h3 class="dash-section-title">🕒 实验室动态</h3>
+              <div class="activity-feed">
+                <div class="feed-item"><div class="feed-icon">✓</div><div class="feed-content"><p>系统已就绪，各项微服务已正常启动。</p><span>刚刚</span></div></div>
+                <div class="feed-item"><div class="feed-icon">💬</div><div class="feed-content"><p>切换到「智能解析舱」体验 Action Item 提取。</p><span>10 分钟前</span></div></div>
+              </div>
+            </div>
+            <div id="dashboard-task-detail" style="display: none; flex-direction: column;">
+              <div class="dash-section-title" style="border-bottom: 1px solid var(--border-light); padding-bottom: 16px; margin-bottom: 0;">
+                <h3 style="display:flex; align-items:center; gap:8px;">
+                  <span style="font-size:20px;">📄 任务详情</span>
+                </h3>
+                <button class="apple-secondary-btn small-btn" onclick="closeDashboardTaskDetail()">← 返回动态</button>
+              </div>
+              <div class="detail-content" id="dashboard-detail-content-body" style="padding: 24px 20px 0 20px;">
+                <!-- 详情动态注入 -->
+              </div>
             </div>
           </div>
-        </aside>
-      </main>
-
-      <section class="resource-section">
-        <div class="resource-shell">
-          <article class="resource-card">
-            <div class="section-heading">
-              <div>
-                <p class="eyebrow">Member Admin</p>
-                <h2>成员管理</h2>
-              </div>
-              <button id="refresh-members" class="secondary-button">刷新成员</button>
-            </div>
-
-            <div class="resource-form-grid">
-              <label>
-                <span>姓名</span>
-                <input id="member-name-input" type="text" placeholder="例如：蒙亚舟" />
-              </label>
-              <label>
-                <span>年级</span>
-                <input id="member-grade-input" type="text" placeholder="例如：2024级" />
-              </label>
-              <label>
-                <span>培养层次</span>
-                <select id="member-degree-type-input">
-                  <option value="master">master</option>
-                  <option value="phd">phd</option>
-                </select>
-              </label>
-              <div class="resource-form-action">
-                <button id="create-member" class="primary-button">新增成员</button>
-              </div>
-            </div>
-
-            <div id="member-feedback" class="import-feedback empty-state">创建成员后，这里会显示反馈。</div>
-            <div id="member-list" class="resource-list empty-state">成员列表加载中...</div>
-          </article>
-
-          <article class="resource-card">
-            <div class="section-heading">
-              <div>
-                <p class="eyebrow">Meeting Admin</p>
-                <h2>会议管理</h2>
-              </div>
-              <button id="refresh-meetings" class="secondary-button">刷新会议</button>
-            </div>
-
-            <div class="resource-form-grid resource-form-grid-wide">
-              <label>
-                <span>会议主题</span>
-                <input id="meeting-topic-input" type="text" placeholder="例如：任务联调会" />
-              </label>
-              <label>
-                <span>会议时间</span>
-                <input id="meeting-time-input" type="text" placeholder="例如：2026-04-20 19:00:00" />
-              </label>
-              <label>
-                <span>会议地点</span>
-                <input id="meeting-location-input" type="text" placeholder="例如：复旦大学实验室 A201" />
-              </label>
-            </div>
-
-            <div class="participant-picker-block">
-              <div class="participant-picker-header">
-                <span>创建会议时的参会人</span>
-                <button id="clear-meeting-members" class="secondary-button small-button">清空选择</button>
-              </div>
-              <div id="meeting-member-picker" class="participant-picker empty-state">请先加载成员。</div>
-            </div>
-
-            <div class="resource-submit-row">
-              <button id="create-meeting" class="primary-button">新增会议</button>
-            </div>
-
-            <div id="meeting-feedback" class="import-feedback empty-state">创建会议或调整参会人后，这里会显示反馈。</div>
-            <div id="meeting-list" class="resource-list empty-state">会议列表加载中...</div>
-          </article>
         </div>
-      </section>
-    </div>
+      </div>
+    </main>
+
+    <!-- 视图 1：智能解析舱 -->
+    <main id="view-inbox" class="view-container">
+      <div class="inbox-layout">
+        <div class="chat-panel">
+          <div class="panel-header">
+            <div>
+              <h3 style="font-size:16px;">载入通讯流与解析</h3>
+              <p style="font-size:12px; color:var(--text-muted); margin-top:2px;">识别引擎：会易达专属学术大模型 v2</p>
+            </div>
+            <div style="display:flex;gap:8px;">
+              <button id="load-sample" class="apple-secondary-btn small-btn">示例</button>
+              <button id="preview-import" class="apple-primary-btn small-btn">一键解析</button>
+            </div>
+          </div>
+          <div class="chat-stream">
+            <div class="import-meta-grid" style="display:flex; gap:16px; margin-bottom: 16px;">
+              <label style="flex:1;">
+                <span style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px;">会议ID</span>
+                <input id="meeting-id-input" value="meeting_001" class="apple-input" />
+              </label>
+              <label style="flex:1;">
+                <span style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px;">操作人</span>
+                <input id="operator-name-input" value="蒙亚舟" class="apple-input" />
+              </label>
+            </div>
+            <textarea id="import-json" rows="18" class="apple-textarea" placeholder="粘贴 JSON 数组 或 文本..."></textarea>
+            <div id="import-feedback" class="import-feedback empty-state mt-10">等待载入数据...</div>
+          </div>
+        </div>
+
+        <div class="chat-panel" style="background:var(--bg-body); border:none; box-shadow:none;">
+          <div class="panel-header" style="background:transparent; padding: 0 0 16px 0; border:none;">
+            <h3 style="font-size:18px;">✨ 待确认行动项清单</h3>
+            <button id="submit-import" class="apple-primary-btn">一键导入工作台</button>
+          </div>
+          <div class="review-panel" style="flex-grow:1;">
+            <div id="import-preview" class="import-preview empty-state" style="background:var(--bg-card);border-radius:var(--radius-lg);padding:20px;height:100%;">
+              <div class="placeholder-text" style="color:var(--text-muted);text-align:center;padding-top:40px;">点击左侧「一键解析」进行体验。</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- 视图 2：研发工作台 -->
+    <main id="view-workspace" class="view-container">
+      <div class="workspace-layout">
+        <div class="kanban-toolbar">
+          <div class="view-switcher" style="padding-top:4px; margin-right:auto;">
+             <div style="font-size:20px; font-weight:700;">研发流转看板</div>
+          </div>
+          <script>
+            document.addEventListener('click', function() {
+              document.querySelectorAll('.user-dropdown').forEach(function(el) {
+                el.classList.remove('open');
+              });
+            });
+          </script>
+          <div class="capsule-filters" style="display:flex; gap:12px; align-items:center;">
+             <div class="user-menu-container">
+               <div class="current-user-badge" id="status-filter-badge" style="height:36px; width:130px; box-sizing:border-box; padding: 0 12px 0 12px; border-radius: 8px; border: 1px solid var(--border-light); background: var(--bg-body); white-space: nowrap; display: flex; align-items: center; justify-content: space-between;" onclick="event.stopPropagation(); document.getElementById('status-dropdown-menu').classList.toggle('open');">
+                 <div style="display:flex; align-items:center; gap:8px;">
+                   <div id="status-filter-dot" style="width:10px; height:10px; border-radius:50%; background:#86868B; flex-shrink:0;"></div>
+                   <span id="status-filter-name" style="font-weight: 500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">所有状态</span>
+                 </div>
+                 <span class="dropdown-icon" style="margin-left: 4px; flex-shrink:0;">▼</span>
+               </div>
+               <div class="user-dropdown" id="status-dropdown-menu" style="width: 150px; padding: 4px;"></div>
+             </div>
+             
+             <div class="user-menu-container">
+               <div class="current-user-badge" id="owner-filter-badge" style="height:36px; width:130px; box-sizing:border-box; padding: 0 12px 0 8px; border-radius: 8px; border: 1px solid var(--border-light); background: var(--bg-body); white-space: nowrap; display: flex; align-items: center; justify-content: space-between;" onclick="event.stopPropagation(); document.getElementById('owner-dropdown-menu').classList.toggle('open');">
+                 <div style="display:flex; align-items:center; gap:8px;">
+                   <div class="user-avatar" id="owner-filter-avatar" style="background:#86868B;color:white;width:20px;height:20px;font-size:10px;flex-shrink:0;">全</div>
+                   <span id="owner-filter-name" style="font-weight: 500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">负责人</span>
+                 </div>
+                 <span class="dropdown-icon" style="margin-left: 4px; flex-shrink:0;">▼</span>
+               </div>
+               <div class="user-dropdown" id="owner-dropdown-menu" style="width: 200px; padding: 4px;"></div>
+             </div>
+
+             <div class="user-menu-container">
+               <div class="current-user-badge" id="risk-filter-badge" style="height:36px; width:130px; box-sizing:border-box; padding: 0 12px 0 12px; border-radius: 8px; border: 1px solid var(--border-light); background: var(--bg-body); white-space: nowrap; display: flex; align-items: center; justify-content: space-between;" onclick="event.stopPropagation(); document.getElementById('risk-dropdown-menu').classList.toggle('open');">
+                 <div style="display:flex; align-items:center; gap:8px;">
+                   <div id="risk-filter-dot" style="width:10px; height:10px; border-radius:50%; background:#86868B; flex-shrink:0;"></div>
+                   <span id="risk-filter-name" style="font-weight: 500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">所有风险</span>
+                 </div>
+                 <span class="dropdown-icon" style="margin-left: 4px; flex-shrink:0;">▼</span>
+               </div>
+               <div class="user-dropdown" id="risk-dropdown-menu" style="width: 150px; padding: 4px;"></div>
+             </div>
+
+             <button id="reset-filters" class="apple-secondary-btn small-btn" style="height:36px; box-sizing:border-box; margin:0; white-space:nowrap;">清除过滤</button>
+             <button id="refresh-board" class="apple-secondary-btn small-btn" style="height:36px; box-sizing:border-box; margin:0; white-space:nowrap;">刷新</button>
+          </div>
+        </div>
+
+        <div class="board-columns" id="board-columns">
+          <!-- 任务列动态生成 -->
+        </div>
+      </div>
+      
+      <!-- 隐藏侧滑抽屉 -->
+      <aside id="task-drawer" class="apple-drawer">
+         <div class="drawer-header">
+           <h2 style="font-size:20px;">任务详情</h2>
+           <button onclick="document.getElementById('task-drawer').classList.remove('open')" class="apple-secondary-btn small-btn" style="border-radius:8px;">关闭</button>
+         </div>
+         <div id="task-detail" class="detail-content empty-state">
+           点击看板卡片查看详情
+         </div>
+      </aside>
+    </main>
+
+    <!-- 视图 3：资源中心 (原 Hub) -->
+    <main id="view-hub" class="view-container">
+       <div class="workspace-layout" style="display:grid; grid-template-columns:1fr 1fr; gap: 24px;">
+         <article class="card-base">
+            <div class="dash-section-title">
+               <h3>📅 近期会议</h3>
+               <button id="refresh-meetings" class="apple-secondary-btn small-btn">同步</button>
+            </div>
+            <div style="display:flex;gap:8px;margin-bottom:12px;">
+              <input id="meeting-topic-input" class="apple-input" type="text" placeholder="主题" />
+              <input id="meeting-time-input" class="apple-input" type="text" placeholder="时间" />
+              <input id="meeting-location-input" class="apple-input" type="text" placeholder="地点" />
+            </div>
+            <div class="participant-picker-block" style="background:var(--bg-body); border-radius:12px; padding:12px; margin-bottom:12px;">
+              <div style="display:flex;justify-content:space-between;margin-bottom:8px;"><span style="font-size:12px;font-weight:600;">参会人</span><button id="clear-meeting-members" class="apple-secondary-btn small-btn" style="padding:2px 8px;font-size:11px;">清空</button></div>
+              <div id="meeting-member-picker" class="participant-picker empty-state" style="font-size:12px;color:var(--text-muted);">尚未加载...</div>
+            </div>
+            <button id="create-meeting" class="apple-primary-btn" style="width:100%;">创建会议</button>
+            <div id="meeting-feedback" class="mt-10" style="font-size:13px; color:var(--danger)"></div>
+            <div id="meeting-list" class="activity-feed mt-20 empty-state" style="margin-top:20px;">加载中...</div>
+         </article>
+         <article class="card-base">
+            <div class="dash-section-title">
+               <h3>👥 实验室成员</h3>
+               <button id="refresh-members" class="apple-secondary-btn small-btn">同步</button>
+            </div>
+            <div style="display:flex;gap:8px;margin-bottom:12px;">
+              <input id="member-name-input" class="apple-input" type="text" placeholder="姓名" />
+              <input id="member-grade-input" class="apple-input" type="text" placeholder="年级" />
+              <select id="member-degree-type-input" class="apple-select"><option value="master">Master</option><option value="phd">PhD</option></select>
+            </div>
+            <button id="create-member" class="apple-primary-btn" style="width:100%;">添加成员</button>
+            <div id="member-feedback" class="mt-10" style="font-size:13px; color:var(--danger)"></div>
+            <div id="member-search-container" style="margin-top: 20px; display: none;">
+              <input id="member-search-input" class="apple-input" type="text" placeholder="🔍 搜索成员姓名或年级..." style="background: var(--bg-body);" />
+            </div>
+            <div id="member-list" class="activity-feed mt-20 empty-state" style="margin-top:12px;">加载中...</div>
+         </article>
+       </div>
+    </main>
   </body>
 </html>

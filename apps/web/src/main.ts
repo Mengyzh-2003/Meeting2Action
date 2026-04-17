@@ -170,9 +170,21 @@ const importPreview = document.querySelector<HTMLDivElement>('#import-preview');
 const importFeedback = document.querySelector<HTMLDivElement>('#import-feedback');
 const meetingIdInput = document.querySelector<HTMLInputElement>('#meeting-id-input');
 const operatorNameInput = document.querySelector<HTMLInputElement>('#operator-name-input');
-const statusFilter = document.querySelector<HTMLSelectElement>('#status-filter');
-const ownerFilter = document.querySelector<HTMLSelectElement>('#owner-filter');
-const riskFilter = document.querySelector<HTMLSelectElement>('#risk-filter');
+// const statusFilter = document.querySelector<HTMLSelectElement>('#status-filter');
+const statusDropdownMenu = document.querySelector<HTMLDivElement>('#status-dropdown-menu');
+const statusFilterBadge = document.querySelector<HTMLDivElement>('#status-filter-badge');
+const statusFilterDot = document.querySelector<HTMLDivElement>('#status-filter-dot');
+const statusFilterName = document.querySelector<HTMLSpanElement>('#status-filter-name');
+
+const ownerDropdownMenu = document.querySelector<HTMLDivElement>('#owner-dropdown-menu');
+const ownerFilterBadge = document.querySelector<HTMLDivElement>('#owner-filter-badge');
+const ownerFilterAvatar = document.querySelector<HTMLDivElement>('#owner-filter-avatar');
+const ownerFilterName = document.querySelector<HTMLSpanElement>('#owner-filter-name');
+const riskDropdownMenu = document.querySelector<HTMLDivElement>('#risk-dropdown-menu');
+const riskFilterBadge = document.querySelector<HTMLDivElement>('#risk-filter-badge');
+const riskFilterDot = document.querySelector<HTMLDivElement>('#risk-filter-dot');
+const riskFilterName = document.querySelector<HTMLSpanElement>('#risk-filter-name');
+// const riskFilter = document.querySelector<HTMLSelectElement>('#risk-filter');
 const resetFiltersButton = document.querySelector<HTMLButtonElement>('#reset-filters');
 const refreshMembersButton = document.querySelector<HTMLButtonElement>('#refresh-members');
 const memberNameInput = document.querySelector<HTMLInputElement>('#member-name-input');
@@ -180,6 +192,8 @@ const memberGradeInput = document.querySelector<HTMLInputElement>('#member-grade
 const memberDegreeTypeInput = document.querySelector<HTMLSelectElement>('#member-degree-type-input');
 const createMemberButton = document.querySelector<HTMLButtonElement>('#create-member');
 const memberFeedback = document.querySelector<HTMLDivElement>('#member-feedback');
+const memberSearchContainer = document.querySelector<HTMLDivElement>('#member-search-container');
+const memberSearchInput = document.querySelector<HTMLInputElement>('#member-search-input');
 const memberList = document.querySelector<HTMLDivElement>('#member-list');
 const refreshMeetingsButton = document.querySelector<HTMLButtonElement>('#refresh-meetings');
 const meetingTopicInput = document.querySelector<HTMLInputElement>('#meeting-topic-input');
@@ -190,13 +204,25 @@ const meetingMemberPicker = document.querySelector<HTMLDivElement>('#meeting-mem
 const createMeetingButton = document.querySelector<HTMLButtonElement>('#create-meeting');
 const meetingFeedback = document.querySelector<HTMLDivElement>('#meeting-feedback');
 const meetingList = document.querySelector<HTMLDivElement>('#meeting-list');
+const navUserBadge = document.querySelector<HTMLDivElement>('#nav-user-badge');
+const navUserAvatar = document.querySelector<HTMLDivElement>('#nav-user-avatar');
+const navUserName = document.querySelector<HTMLSpanElement>('#nav-user-name');
+const dropdownUserList = document.querySelector<HTMLDivElement>('#dropdown-user-list');
+const userDropdownMenu = document.querySelector<HTMLDivElement>('#user-dropdown-menu');
+const dashboardWelcome = document.querySelector<HTMLHeadingElement>('#dashboard-welcome');
+const dashboardTodoList = document.querySelector<HTMLDivElement>('#dashboard-todo-list');
+const dashboardActivityFeed = document.querySelector<HTMLDivElement>('#dashboard-activity-feed');
+const dashboardTaskDetail = document.querySelector<HTMLDivElement>('#dashboard-task-detail');
+const dashboardDetailContentBody = document.querySelector<HTMLDivElement>('#dashboard-detail-content-body');
 
 let selectedTaskId: string | null = null;
+let selectedDashboardTaskId: string | null = null;
 let draftActionItems: ActionItem[] = [];
 let latestBoardData: BoardResponse | null = null;
 let latestBoardStats: BoardStats | null = null;
 let latestMembers: Member[] = [];
 let latestMeetings: Meeting[] = [];
+let currentUserMemberId: string | null = null;
 const boardFilters: BoardFilters = {
   status: 'all',
   ownerName: 'all',
@@ -223,9 +249,20 @@ const safeImportPreview = assertElement(importPreview, 'import preview not found
 const safeImportFeedback = assertElement(importFeedback, 'import feedback not found');
 const safeMeetingIdInput = assertElement(meetingIdInput, 'meeting id input not found');
 const safeOperatorNameInput = assertElement(operatorNameInput, 'operator name input not found');
-const safeStatusFilter = assertElement(statusFilter, 'status filter not found');
-const safeOwnerFilter = assertElement(ownerFilter, 'owner filter not found');
-const safeRiskFilter = assertElement(riskFilter, 'risk filter not found');
+// const safeStatusFilter = assertElement(statusFilter, 'status filter not found');
+const safeStatusDropdownMenu = assertElement(statusDropdownMenu, 'status dropdown menu not found');
+const safeStatusFilterDot = assertElement(statusFilterDot, 'status filter dot');
+const safeStatusFilterName = assertElement(statusFilterName, 'status filter name');
+
+const safeOwnerDropdownMenu = assertElement(ownerDropdownMenu, 'owner dropdown menu not found');
+const safeOwnerFilterBadge = assertElement(ownerFilterBadge, 'owner filter badge not found');
+const safeOwnerFilterAvatar = assertElement(ownerFilterAvatar, 'owner filter avatar not found');
+const safeOwnerFilterName = assertElement(ownerFilterName, 'owner filter name not found');
+
+const safeRiskDropdownMenu = assertElement(riskDropdownMenu, 'risk dropdown');
+const safeRiskFilterDot = assertElement(riskFilterDot, 'risk dot');
+const safeRiskFilterName = assertElement(riskFilterName, 'risk name');
+// const safeRiskFilter = assertElement(riskFilter, 'risk filter not found');
 const safeResetFiltersButton = assertElement(resetFiltersButton, 'reset filters button not found');
 const safeRefreshMembersButton = assertElement(refreshMembersButton, 'refresh members button not found');
 const safeMemberNameInput = assertElement(memberNameInput, 'member name input not found');
@@ -233,6 +270,8 @@ const safeMemberGradeInput = assertElement(memberGradeInput, 'member grade input
 const safeMemberDegreeTypeInput = assertElement(memberDegreeTypeInput, 'member degree type input not found');
 const safeCreateMemberButton = assertElement(createMemberButton, 'create member button not found');
 const safeMemberFeedback = assertElement(memberFeedback, 'member feedback not found');
+const safeMemberSearchContainer = assertElement(memberSearchContainer, 'member search container');
+const safeMemberSearchInput = assertElement(memberSearchInput, 'member search input');
 const safeMemberList = assertElement(memberList, 'member list not found');
 const safeRefreshMeetingsButton = assertElement(refreshMeetingsButton, 'refresh meetings button not found');
 const safeMeetingTopicInput = assertElement(meetingTopicInput, 'meeting topic input not found');
@@ -243,6 +282,16 @@ const safeMeetingMemberPicker = assertElement(meetingMemberPicker, 'meeting memb
 const safeCreateMeetingButton = assertElement(createMeetingButton, 'create meeting button not found');
 const safeMeetingFeedback = assertElement(meetingFeedback, 'meeting feedback not found');
 const safeMeetingList = assertElement(meetingList, 'meeting list not found');
+const safeNavUserBadge = assertElement(navUserBadge, 'nav user badge not found');
+const safeNavUserAvatar = assertElement(navUserAvatar, 'nav user avatar not found');
+const safeNavUserName = assertElement(navUserName, 'nav user name not found');
+const safeDropdownUserList = assertElement(dropdownUserList, 'dropdown user list not found');
+const safeUserDropdownMenu = assertElement(userDropdownMenu, 'user dropdown menu not found');
+const safeDashboardWelcome = assertElement(dashboardWelcome, 'dashboard welcome not found');
+const safeDashboardTodoList = assertElement(dashboardTodoList, 'dashboard todo list not found');
+const safeDashboardActivityFeed = assertElement(dashboardActivityFeed, 'dashboard activity feed not found');
+const safeDashboardTaskDetail = assertElement(dashboardTaskDetail, 'dashboard task detail not found');
+const safeDashboardDetailContentBody = assertElement(dashboardDetailContentBody, 'dashboard detail content body not found');
 
 function escapeHtml(value: string): string {
   return value
@@ -533,6 +582,120 @@ function renderStats(stats: BoardStats): void {
     .join('');
 }
 
+function getCurrentUserName(): string {
+  const member = latestMembers.find((m) => m.id === currentUserMemberId);
+  return member?.name ?? (safeOperatorNameInput.value.trim() || '');
+}
+
+function renderDashboardTodos(): void {
+  const allTasks = latestBoardData ? latestBoardData.columns.flatMap((c) => c.items) : [];
+  const userName = getCurrentUserName();
+  const myTodos = allTasks.filter((t) => t.ownerName === userName && t.status !== 'done');
+
+  if (myTodos.length === 0) {
+    safeDashboardTodoList.innerHTML = '<div class="empty-state" style="padding: 24px;">太棒了！当前没有任何待办任务。</div>';
+    return;
+  }
+
+  safeDashboardTodoList.innerHTML = myTodos
+    .map((task) => {
+      let dueBadge = '';
+      if (isOverdue(task)) {
+        dueBadge = '<span class="due-badge due-today">已逾期</span>';
+      } else if (isDueSoon(task)) {
+        dueBadge = '<span class="due-badge due-soon">即将截止</span>';
+      } else if (task.dueDate) {
+        dueBadge = `<span class="due-badge" style="background:var(--bg-body); color:var(--text-muted);">${formatDate(task.dueDate)}</span>`;
+      }
+      return `
+        <div class="urgent-task-item ${selectedDashboardTaskId === task.id ? 'active' : ''}" data-dashboard-task-id="${task.id}">
+          <div class="task-main-info">
+            <h4>${escapeHtml(task.title)}</h4>
+            <p>状态：${task.status.toUpperCase()}</p>
+          </div>
+          <div class="task-action">
+            ${dueBadge}
+          </div>
+        </div>
+      `;
+    })
+    .join('');
+
+  safeDashboardTodoList.querySelectorAll<HTMLElement>('[data-dashboard-task-id]').forEach((card) => {
+    card.addEventListener('click', async () => {
+      const taskId = card.dataset.dashboardTaskId;
+      if (taskId) {
+        await openDashboardTaskDetail(taskId);
+      }
+    });
+  });
+}
+
+async function openDashboardTaskDetail(taskId: string): Promise<void> {
+  selectedDashboardTaskId = taskId;
+  safeDashboardTodoList.querySelectorAll<HTMLElement>('[data-dashboard-task-id]').forEach((c) => {
+    c.classList.toggle('active', c.dataset.dashboardTaskId === taskId);
+  });
+
+  safeDashboardActivityFeed.style.display = 'none';
+  safeDashboardTaskDetail.style.display = 'flex';
+
+  const task = await fetchJson<Task>(`/api/tasks/${taskId}`);
+
+  const currentVal = task.dueDate || new Date().toISOString().split('T')[0];
+  const [y, m, d] = currentVal.split('-').map(Number);
+  const isDue = isOverdue(task);
+
+  safeDashboardDetailContentBody.innerHTML = `
+    <div class="d-section" style="display:flex; gap:24px; align-items:center; flex-wrap:wrap;">
+      <div>
+        <div class="d-label">负责人</div>
+        ${createTaskOwnerDropdownHTML(task)}
+      </div>
+      <div>
+        <div class="d-label">当前状态</div>
+        ${createStatusActions(task)}
+      </div>
+      <div>
+        <div class="d-label" style="display:flex; gap:4px; align-items:center;">
+           规定截止 <span style="font-size:11px; opacity:0.6; font-weight:normal;">(滚轮调整)</span>
+        </div>
+        <div class="date-scroll-picker" style="color:${isDue ? 'var(--danger)' : 'inherit'}; margin-top:2px;">
+          <span class="date-part year" tabindex="0">${y}</span>/
+          <span class="date-part month" tabindex="0">${String(m).padStart(2, '0')}</span>/
+          <span class="date-part day" tabindex="0">${String(d).padStart(2, '0')}</span>
+        </div>
+      </div>
+    </div>
+    <div class="d-section">
+      <div class="d-label">任务描述 & 标题</div>
+      <h3 style="font-size:18px; margin-bottom:8px;">${escapeHtml(task.title)}</h3>
+      <p style="color:var(--text-muted); margin:0;">${escapeHtml(task.description || '暂无描述')}</p>
+    </div>
+    <div class="d-section">
+      <div class="d-label">验收标准 (Acceptance Criteria)</div>
+      <div class="d-box">${escapeHtml(task.acceptanceCriteria ?? '暂无验收标准')}</div>
+    </div>
+    <div class="d-section">
+      <div class="d-label">AI 语义溯源 (置信度 ${task.confidence})</div>
+      <div class="d-box">${escapeHtml(task.sourceText || '暂无')}</div>
+    </div>
+  `;
+
+  safeDashboardDetailContentBody.querySelectorAll<HTMLButtonElement>('[data-next-status]').forEach((button) => {
+    button.addEventListener('click', async (event) => {
+      event.stopPropagation();
+      const nextStatus = button.dataset.nextStatus as TaskStatus;
+      if (!nextStatus || task.status === nextStatus) return;
+      await updateTaskStatus(task, nextStatus);
+      // Re-open the detail view to refresh the content with the new status
+      await openDashboardTaskDetail(task.id);
+    });
+  });
+
+  setupEditableTaskFields(safeDashboardDetailContentBody, task);
+}
+
 function setMemberFeedback(message: string, tone: 'neutral' | 'success' | 'error' = 'neutral'): void {
   safeMemberFeedback.className = `import-feedback tone-${tone}`;
   safeMemberFeedback.textContent = message;
@@ -545,6 +708,93 @@ function setMeetingFeedback(message: string, tone: 'neutral' | 'success' | 'erro
 
 function degreeTypeLabel(value: Member['degreeType']): string {
   return value === 'phd' ? '博士' : '硕士';
+}
+
+function getGreetingByHour(): string {
+  const hour = new Date().getHours();
+  if (hour < 12) {
+    return '上午好';
+  }
+  if (hour < 18) {
+    return '下午好';
+  }
+  return '晚上好';
+}
+
+function memberGradeLabel(member: Pick<Member, 'degreeType' | 'grade'>): string {
+  return `${degreeTypeLabel(member.degreeType)}${member.grade}`;
+}
+
+function avatarColorByMemberId(memberId: string): string {
+  const palette = ['#5AC8FA', '#34C759', '#5856D6', '#FF9500', '#FF2D55', '#007AFF'];
+  const hash = Array.from(memberId).reduce((sum, char) => sum + char.charCodeAt(0), 0);
+  return palette[hash % palette.length];
+}
+
+function applyCurrentUser(member: Member): void {
+  const gradeLabel = memberGradeLabel(member);
+  safeNavUserAvatar.textContent = member.name.slice(0, 1);
+  safeNavUserAvatar.style.background = avatarColorByMemberId(member.id);
+  safeNavUserAvatar.style.color = '#FFFFFF';
+  safeNavUserName.textContent = `${member.name}（${gradeLabel}）`;
+  safeDashboardWelcome.textContent = `${getGreetingByHour()}，${member.name}。`;
+  safeOperatorNameInput.value = member.name;
+}
+
+function renderTeamSwitcher(): void {
+  if (latestMembers.length === 0) {
+    safeDropdownUserList.innerHTML =
+      '<div class="dropdown-header" style="margin: 0; border: none; text-transform: none; letter-spacing: 0;">暂无成员，请先在资源中心添加成员</div>';
+    safeNavUserAvatar.textContent = '?';
+    safeNavUserAvatar.style.background = '#86868B';
+    safeNavUserName.textContent = '暂无成员';
+    safeDashboardWelcome.textContent = `${getGreetingByHour()}。`;
+    safeOperatorNameInput.value = '';
+    currentUserMemberId = null;
+    return;
+  }
+
+  const currentMember = latestMembers.find((member) => member.id === currentUserMemberId) ?? latestMembers[0];
+  currentUserMemberId = currentMember.id;
+  applyCurrentUser(currentMember);
+
+  safeDropdownUserList.innerHTML = latestMembers
+    .map((member) => {
+      const isActive = member.id === currentUserMemberId;
+      const color = avatarColorByMemberId(member.id);
+      return `
+        <div class="dropdown-item ${isActive ? 'active' : ''}" data-user-member-id="${escapeHtml(member.id)}">
+          <div class="user-avatar" style="background:${color};color:#FFFFFF;">${escapeHtml(member.name.slice(0, 1))}</div>
+          ${escapeHtml(member.name)}（${escapeHtml(memberGradeLabel(member))}）
+        </div>
+      `;
+    })
+    .join('');
+}
+
+function bindTeamSwitcherEvents(): void {
+  safeDropdownUserList.addEventListener('click', (event) => {
+    const item = (event.target as HTMLElement).closest<HTMLElement>('[data-user-member-id]');
+    if (!item) {
+      return;
+    }
+
+    const memberId = item.dataset.userMemberId;
+    if (!memberId) {
+      return;
+    }
+
+    const targetMember = latestMembers.find((member) => member.id === memberId);
+    if (!targetMember) {
+      return;
+    }
+
+    currentUserMemberId = targetMember.id;
+    renderTeamSwitcher();
+    renderDashboardTodos();
+    safeUserDropdownMenu.classList.remove('open');
+    safeNavUserBadge.classList.remove('open');
+  });
 }
 
 function renderMeetingMemberPicker(): void {
@@ -759,16 +1009,79 @@ function bindMeetingEvents(): void {
   });
 }
 
-function renderMembers(): void {
+function renderMembers(searchText: string = ''): void {
+  const filteredMembers = latestMembers.filter(m => 
+    m.name.toLowerCase().includes(searchText.toLowerCase()) || 
+    m.grade.toLowerCase().includes(searchText.toLowerCase())
+  );
+
   if (latestMembers.length === 0) {
+    safeMemberSearchContainer.style.display = 'none';
     safeMemberList.className = 'resource-list empty-state';
     safeMemberList.textContent = '当前没有成员数据。';
     return;
   }
 
+  safeMemberSearchContainer.style.display = 'block';
+
+  if (filteredMembers.length === 0) {
+    safeMemberList.className = 'resource-list empty-state';
+    safeMemberList.textContent = '没有找到匹配的成员。';
+    return;
+  }
+
   safeMemberList.className = 'resource-list';
-  safeMemberList.innerHTML = latestMembers.map(createMemberCard).join('');
+  
+  let tableHTML = `
+    <div style="background:var(--bg-body); border-radius:12px; border:1px solid var(--border-light); overflow-y:auto; max-height:380px;">
+      <table style="width:100%; border-collapse:collapse; text-align:left; font-size:14px;">
+        <thead style="background:var(--bg-card); position:sticky; top:0; z-index:10; box-shadow:0 1px 0 var(--border-light);">
+          <tr>
+            <th style="padding:12px 16px; font-weight:600; color:var(--text-muted); background:var(--bg-card);">姓名</th>
+            <th style="padding:12px 16px; font-weight:600; color:var(--text-muted); background:var(--bg-card);">年级</th>
+            <th style="padding:12px 16px; font-weight:600; color:var(--text-muted); background:var(--bg-card);">培养层次</th>
+            <th style="padding:12px 16px; font-weight:600; color:var(--text-muted); text-align:right; background:var(--bg-card);">操作</th>
+          </tr>
+        </thead>
+        <tbody>
+  `;
+
+  [...filteredMembers].sort((a,b) => a.name.localeCompare(b.name, 'zh-CN')).forEach(member => {
+    tableHTML += `
+          <tr style="border-bottom:1px solid var(--border-light); transition:0.2s;">
+            <td style="padding:12px 16px;">
+              <div style="display:flex; align-items:center; gap:8px;">
+                <div style="width:24px; height:24px; border-radius:50%; background:${avatarColorByMemberId(member.id)}; color:white; display:flex; justify-content:center; align-items:center; font-size:12px; font-weight:bold;">
+                  ${escapeHtml(member.name.charAt(0))}
+                </div>
+                <span style="font-weight:500;">${escapeHtml(member.name)}</span>
+              </div>
+            </td>
+            <td style="padding:12px 16px; color:var(--text-main);">${escapeHtml(member.grade)}</td>
+            <td style="padding:12px 16px; color:var(--text-main);">${degreeTypeLabel(member.degreeType)}</td>
+            <td style="padding:12px 16px; text-align:right;">
+              <button class="apple-secondary-btn small-btn" style="color:var(--danger); border-color:transparent; background:transparent;" data-delete-member-id="${member.id}" onmouseover="this.style.background='var(--danger-soft)'" onmouseout="this.style.background='transparent'">删除</button>
+            </td>
+          </tr>
+    `;
+  });
+
+  tableHTML += `
+        </tbody>
+      </table>
+    </div>
+  `;
+
+  safeMemberList.innerHTML = tableHTML;
   bindMemberEvents();
+
+  if (safeMemberSearchInput.getAttribute('data-bound') !== 'true') {
+    safeMemberSearchInput.addEventListener('input', (e) => {
+      const target = e.target as HTMLInputElement;
+      renderMembers(target.value);
+    });
+    safeMemberSearchInput.setAttribute('data-bound', 'true');
+  }
 }
 
 function renderMeetings(): void {
@@ -791,8 +1104,12 @@ async function loadResources(): Promise<void> {
     ]);
     latestMembers = membersResponse.items;
     latestMeetings = meetingsResponse.items;
+    renderTeamSwitcher();
     renderMeetingMemberPicker();
-    renderMembers();
+    renderStatusFilter();
+    renderRiskFilter();
+    renderOwnerFilter();
+    renderMembers(safeMemberSearchInput.value.trim());
     renderMeetings();
   } catch (error) {
     const message = error instanceof Error ? error.message : '加载资源失败';
@@ -810,6 +1127,11 @@ async function createMember(): Promise<void> {
 
   if (!name || !grade) {
     setMemberFeedback('请填写成员姓名和年级。', 'error');
+    return;
+  }
+
+  if (latestMembers.some(m => m.name === name)) {
+    setMemberFeedback(`成员 ${name} 已存在，请勿重复添加。`, 'error');
     return;
   }
 
@@ -876,22 +1198,149 @@ async function createMeeting(): Promise<void> {
   }
 }
 
-function renderOwnerFilter(columns: BoardColumn[]): void {
-  const ownerNames = Array.from(
-    new Set(
-      columns
-        .flatMap((column) => column.items)
-        .map((task) => task.ownerName)
-        .filter((ownerName): ownerName is string => Boolean(ownerName)),
-    ),
-  ).sort((left, right) => left.localeCompare(right, 'zh-CN'));
+function renderStatusFilter(): void {
+  const currentStatus = boardFilters.status;
+  const statusLabels: Record<string, string> = {
+    all: '所有状态',
+    todo: 'To Do',
+    doing: 'Doing',
+    done: 'Done'
+  };
+  const statusColors: Record<string, string> = {
+    all: '#86868B',
+    todo: 'var(--text-muted)',
+    doing: '#007AFF',
+    done: '#34C759'
+  };
 
-  safeOwnerFilter.innerHTML = [
-    '<option value="all">全部负责人</option>',
-    ...ownerNames.map((ownerName) => `<option value="${escapeHtml(ownerName)}">${escapeHtml(ownerName)}</option>`),
-  ].join('');
+  safeStatusFilterName.textContent = statusLabels[currentStatus] || '所有状态';
+  safeStatusFilterDot.style.background = statusColors[currentStatus] || '#86868B';
 
-  safeOwnerFilter.value = ownerNames.includes(boardFilters.ownerName) ? boardFilters.ownerName : 'all';
+  let dropHTML = '';
+  ['all', 'todo', 'doing', 'done'].forEach((st) => {
+    const isActive = currentStatus === st ? 'active' : '';
+    dropHTML += `
+      <div class="dropdown-item ${isActive}" data-val="${st}">
+        <div style="width:10px;height:10px;border-radius:50%;background:${statusColors[st]};margin-right:8px;"></div>
+        ${statusLabels[st]}
+      </div>
+    `;
+  });
+  safeStatusDropdownMenu.innerHTML = dropHTML;
+
+  safeStatusDropdownMenu.querySelectorAll<HTMLElement>('.dropdown-item').forEach((item) => {
+    item.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const val = item.dataset.val as BoardFilters['status'];
+      if (val) {
+        boardFilters.status = val;
+        safeStatusDropdownMenu.classList.remove('open');
+        renderStatusFilter();
+        if (latestBoardData) {
+          await renderBoardView(filterBoard(latestBoardData));
+        }
+      }
+    });
+  });
+}
+
+function renderRiskFilter(): void {
+  const currentRisk = boardFilters.risk;
+  const riskLabels: Record<string, string> = {
+    all: '所有风险',
+    overdue: '逾期',
+    dueSoon: '即将逾期',
+    highPriority: '高风险'
+  };
+  const riskColors: Record<string, string> = {
+    all: '#86868B',
+    overdue: '#FF3B30',
+    dueSoon: '#FF9500',
+    highPriority: '#FF2D55'
+  };
+
+  safeRiskFilterName.textContent = riskLabels[currentRisk] || '所有风险';
+  safeRiskFilterDot.style.background = riskColors[currentRisk] || '#86868B';
+
+  let dropHTML = '';
+  ['all', 'overdue', 'dueSoon', 'highPriority'].forEach((r) => {
+    const isActive = currentRisk === r ? 'active' : '';
+    dropHTML += `
+      <div class="dropdown-item ${isActive}" data-val="${r}">
+        <div style="width:10px;height:10px;border-radius:50%;background:${riskColors[r]};margin-right:8px;"></div>
+        ${riskLabels[r]}
+      </div>
+    `;
+  });
+  safeRiskDropdownMenu.innerHTML = dropHTML;
+
+  safeRiskDropdownMenu.querySelectorAll<HTMLElement>('.dropdown-item').forEach((item) => {
+    item.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const val = item.dataset.val as BoardFilters['risk'];
+      if (val) {
+        boardFilters.risk = val;
+        safeRiskDropdownMenu.classList.remove('open');
+        renderRiskFilter();
+        if (latestBoardData) {
+          await renderBoardView(filterBoard(latestBoardData));
+        }
+      }
+    });
+  });
+}
+
+function renderOwnerFilter(): void {
+  const currentOwner = boardFilters.ownerName;
+  
+  if (currentOwner === 'all') {
+    safeOwnerFilterName.textContent = '负责人';
+    safeOwnerFilterAvatar.textContent = '全';
+    safeOwnerFilterAvatar.style.background = '#86868B';
+  } else {
+    const member = latestMembers.find(m => m.name === currentOwner);
+    safeOwnerFilterName.textContent = currentOwner;
+    safeOwnerFilterAvatar.textContent = currentOwner.charAt(0);
+    safeOwnerFilterAvatar.style.background = member ? avatarColorByMemberId(member.id) : '#86868B';
+  }
+
+  const allItemActive = currentOwner === 'all' ? 'active' : '';
+  let dropHTML = `
+    <div class="dropdown-item ${allItemActive}" data-owner-value="all">
+      <div class="user-avatar" style="background:#86868B; color:white; width:24px; height:24px; font-size:12px;">全</div>
+      负责人
+    </div>
+  `;
+
+  [...latestMembers].sort((a,b) => a.name.localeCompare(b.name, 'zh-CN')).forEach((member) => {
+    const isActive = currentOwner === member.name ? 'active' : '';
+    const avatarColor = avatarColorByMemberId(member.id);
+    dropHTML += `
+      <div class="dropdown-item ${isActive}" data-owner-value="${escapeHtml(member.name)}">
+        <div class="user-avatar" style="background:${avatarColor}; color:white; width:24px; height:24px; font-size:12px;">
+          ${escapeHtml(member.name.charAt(0))}
+        </div>
+        ${escapeHtml(member.name)}
+      </div>
+    `;
+  });
+
+  safeOwnerDropdownMenu.innerHTML = dropHTML;
+
+  safeOwnerDropdownMenu.querySelectorAll<HTMLElement>('.dropdown-item').forEach((item) => {
+    item.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const val = item.dataset.ownerValue;
+      if (val) {
+        boardFilters.ownerName = val;
+        safeOwnerDropdownMenu.classList.remove('open');
+        renderOwnerFilter();
+        if (latestBoardData) {
+          await renderBoardView(filterBoard(latestBoardData));
+        }
+      }
+    });
+  });
 }
 
 function taskMatchesFilters(task: Task): boolean {
@@ -932,22 +1381,24 @@ function filterBoard(board: BoardResponse): BoardResponse {
 
 async function renderBoardView(board: BoardResponse, preferredTaskId?: string | null): Promise<void> {
   renderStats(latestBoardStats ?? board.stats);
-  renderOwnerFilter(latestBoardData?.columns ?? board.columns);
+  renderOwnerFilter();
   renderBoard(board.columns);
-  bindBoardEvents(board.columns);
+  renderDashboardTodos();
 
   const allTasks = board.columns.flatMap((column) => column.items);
   const nextSelectedTask = allTasks.find((task) => task.id === (preferredTaskId ?? selectedTaskId)) ?? allTasks[0];
 
   if (nextSelectedTask) {
     selectedTaskId = nextSelectedTask.id;
-    renderBoard(board.columns);
-    bindBoardEvents(board.columns);
+    renderBoard(board.columns); // Re-render to apply selection style
     await renderTaskDetail(nextSelectedTask);
   } else {
     selectedTaskId = null;
-    safeTaskDetail.textContent = '当前筛选条件下没有任务。';
+    safeTaskDetail.innerHTML = '<div class="empty-state">当前筛选条件下没有任务。</div>';
   }
+
+  // Always bind events after all rendering is complete
+  bindBoardEvents(board.columns);
 }
 
 async function updateTaskStatus(task: Task, status: TaskStatus): Promise<void> {
@@ -958,143 +1409,274 @@ async function updateTaskStatus(task: Task, status: TaskStatus): Promise<void> {
     },
     body: JSON.stringify({
       status,
-      operatorName: '蒙亚舟',
+      operatorName: safeOperatorNameInput.value.trim() || '系统操作',
     }),
   });
 
   await loadBoard(task.id);
 }
 
-function createStatusActions(task: Task): string {
-  return ['todo', 'doing', 'done']
-    .map((status) => {
-      const active = task.status === status;
-      return `
-        <button class="status-chip ${active ? 'active' : ''}" data-task-id="${task.id}" data-next-status="${status}">
-          ${status.toUpperCase()}
-        </button>
-      `;
-    })
-    .join('');
-}
+function createTaskOwnerDropdownHTML(task: Task): string {
+  const currentOwner = task.ownerName;
+  const member = currentOwner ? latestMembers.find(m => m.name === currentOwner) : null;
+  const avatarTxt = currentOwner ? currentOwner.charAt(0) : '?';
+  const avatarBg = member ? avatarColorByMemberId(member.id) : 'var(--text-muted)';
+  const displayName = currentOwner || '待指派';
 
-function renderBoard(columns: BoardColumn[]): void {
-  safeBoardColumns.innerHTML = columns
-    .map(
-      (column) => `
-        <section class="board-column">
-          <header class="column-header">
-            <h3>${column.title}</h3>
-            <span>${column.items.length}</span>
-          </header>
-          <div class="column-body">
-            ${
-              column.items.length > 0
-                ? column.items
-                    .map(
-                      (task) => `
-                        <article class="task-card ${selectedTaskId === task.id ? 'selected' : ''} ${isOverdue(task) ? 'risk-overdue' : ''} ${isDueSoon(task) ? 'risk-due-soon' : ''}" data-task-card-id="${task.id}">
-                          <div class="task-card-top">
-                            <p class="task-title">${task.title}</p>
-                            <div class="task-badge-group">
-                              ${taskRiskLabel(task) ? `<span class="risk-badge ${isOverdue(task) ? 'risk-badge-overdue' : 'risk-badge-due-soon'}">${taskRiskLabel(task)}</span>` : ''}
-                              <span class="priority-tag priority-${task.priority}">${priorityLabel(task.priority)}</span>
-                            </div>
-                          </div>
-                          <p class="task-meta">负责人：${task.ownerName ?? '待指派'}</p>
-                          <p class="task-meta">截止时间：${formatDate(task.dueDate)}</p>
-                          <div class="status-actions">
-                            ${createStatusActions(task)}
-                          </div>
-                        </article>
-                      `,
-                    )
-                    .join('')
-                : '<div class="column-empty">当前列暂无任务</div>'
-            }
-          </div>
-        </section>
-      `,
-    )
-    .join('');
-}
+  let itemsHTML = `
+    <div class="dropdown-item ${!currentOwner ? 'active' : ''}" data-task-owner-val="">
+      <div class="user-avatar" style="background:var(--text-muted); color:white; width:24px; height:24px; font-size:12px;">?</div>
+      待指派
+    </div>
+  `;
 
-async function renderTaskDetail(task: Task): Promise<void> {
-  const taskDetailData = await fetchJson<Task>(`/api/tasks/${task.id}`);
-  const activity = await fetchJson<ActivityResponse>(`/api/tasks/${task.id}/activity`);
+  [...latestMembers].sort((a,b) => a.name.localeCompare(b.name, 'zh-CN')).forEach((m) => {
+    const isActive = currentOwner === m.name ? 'active' : '';
+    const color = avatarColorByMemberId(m.id);
+    itemsHTML += `
+      <div class="dropdown-item ${isActive}" data-task-owner-val="${escapeHtml(m.name)}">
+         <div class="user-avatar" style="background:${color}; color:white; width:24px; height:24px; font-size:12px;">
+           ${escapeHtml(m.name.charAt(0))}
+         </div>
+         ${escapeHtml(m.name)}
+      </div>
+    `;
+  });
 
-  safeTaskDetail.innerHTML = `
-    <div class="detail-block">
-      <h3>${taskDetailData.title}</h3>
-      <p>${taskDetailData.description}</p>
-    </div>
-    <div class="detail-grid">
-      <div><span>负责人</span><strong>${taskDetailData.ownerName ?? '待指派'}</strong></div>
-      <div><span>截止时间</span><strong>${formatDate(taskDetailData.dueDate)}</strong></div>
-      <div><span>优先级</span><strong>${priorityLabel(taskDetailData.priority)}</strong></div>
-      <div><span>置信度</span><strong>${taskDetailData.confidence}</strong></div>
-    </div>
-    <div class="detail-block">
-      <h4>验收标准</h4>
-      <p>${taskDetailData.acceptanceCriteria ?? '暂无验收标准'}</p>
-    </div>
-    <div class="detail-block">
-      <h4>来源语句</h4>
-      <p>${taskDetailData.sourceText}</p>
-    </div>
-    <div class="detail-block">
-      <h4>活动记录</h4>
-      <div class="activity-list">
-        ${activity.items
-          .map(
-            (item) => `
-              <div class="activity-item">
-                <p>${item.actionDetail}</p>
-                <span>${item.operatorName} · ${item.createdAt}</span>
-              </div>
-            `,
-          )
-          .join('')}
+  return `
+    <div class="user-menu-container task-owner-inline-container" style="position:relative; z-index: 1000;">
+      <div class="current-user-badge task-owner-badge" style="height:32px; box-sizing:border-box; padding: 0 12px 0 8px; border-radius: 8px; border: 1px solid var(--border-light); background: transparent; white-space: nowrap; display: flex; align-items: center; justify-content: space-between; z-index: 1001;" onclick="event.stopPropagation(); document.querySelectorAll('.user-dropdown').forEach(el => {if (el !== this.nextElementSibling) el.classList.remove('open')}); this.nextElementSibling.classList.toggle('open');">
+        <div style="display:flex; align-items:center; gap:8px;">
+          <div class="user-avatar" style="background:${avatarBg};color:white;width:20px;height:20px;font-size:10px;flex-shrink:0;">${escapeHtml(avatarTxt)}</div>
+          <span style="font-weight: 600; font-size: 15px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color: var(--text-main);">${escapeHtml(displayName)}</span>
+        </div>
+        <span class="dropdown-icon" style="margin-left: 4px; flex-shrink:0;">▼</span>
+      </div>
+      <div class="user-dropdown" style="width: 200px; padding: 4px; left: 0; right: auto; top: calc(100% + 8px); z-index: 9999;">
+        ${itemsHTML}
       </div>
     </div>
   `;
 }
 
+function createStatusActions(task: Task): string {
+  return '<div class="status-pill-group">' +
+    ['todo', 'doing', 'done']
+      .map((status) => {
+        const active = task.status === status;
+        const label = status === 'todo' ? 'To Do' : status === 'doing' ? 'Doing' : 'Done';
+        return `<button class="status-pill-btn ${status} ${active ? 'active' : ''}" data-task-id="${task.id}" data-next-status="${status}">${label}</button>`;
+      })
+      .join('') +
+    '</div>';
+}
+function renderBoard(columns: BoardColumn[]): void {
+  safeBoardColumns.innerHTML = columns
+    .map(
+      (column) => `
+        <section class="board-col">
+          <header class="col-header">
+            <span>${column.title}</span>
+            <span style="background:var(--border-hard); padding:2px 8px; border-radius:10px; color:white; font-size:12px;">${column.items.length}</span>
+          </header>
+          <div class="task-list">
+            ${
+              column.items.length > 0
+                ? column.items
+                    .map(
+                      (task) => `
+                        <article class="task-card ${selectedTaskId === task.id ? 'selected' : ''} ${isOverdue(task) ? 'high-risk' : ''}" data-task-card-id="${task.id}">
+                          <h4 class="t-title">${task.title}</h4>
+                          <div class="t-footer">
+                            <div class="t-meta">
+                              ${isOverdue(task) ? `<span style="color:var(--danger); font-weight:600;">已逾期</span>` : formatDate(task.dueDate)}
+                            </div>
+                            <div class="t-avatar" style="background:var(--accent-soft); color:var(--accent); border-radius:50%; display:flex; align-items:center; justify-content:center; width:20px; height:20px; font-size:10px; font-weight:bold;">
+                              ${task.ownerName ? task.ownerName.charAt(0) : '?'}
+                            </div>
+                          </div>
+                        </article>
+                      `
+                    )
+                    .join('')
+                : '<div class="column-empty" style="padding:10px; font-size:13px; color:var(--text-muted); text-align:center;">当前列暂无任务</div>'
+            }
+          </div>
+        </section>
+      `
+    )
+    .join('');
+}
+
+function setupEditableTaskFields(container: HTMLElement, task: Task): void {
+  const taskOwnerContainer = container.querySelector('.task-owner-inline-container');
+  if (taskOwnerContainer) {
+    const dropdownItems = taskOwnerContainer.querySelectorAll<HTMLElement>('.dropdown-item');
+    dropdownItems.forEach((item) => {
+      item.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const value = item.dataset.taskOwnerVal || null;
+        
+        await fetchJson<Task>(`/api/tasks/${task.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ownerName: value }),
+        });
+        
+        const dropdownMenu = taskOwnerContainer.querySelector('.user-dropdown');
+        if (dropdownMenu) dropdownMenu.classList.remove('open');
+        
+        await loadBoard(task.id);
+        
+        // Re-render task detail view directly where appropriate
+        if (container.id === 'task-detail' || container.closest('#task-detail')) {
+          await renderTaskDetail(task); // but we only have `task`, let's just trigger loadBoard which does it nicely or we can refresh by other means... wait, loadBoard will maintain selection
+        } else {
+          await openDashboardTaskDetail(task.id);
+        }
+      });
+    });
+  }
+
+  const yearEl = container.querySelector('.date-part.year');
+  const monthEl = container.querySelector('.date-part.month');
+  const dayEl = container.querySelector('.date-part.day');
+  
+  if (!yearEl || !monthEl || !dayEl) return;
+
+  const currentVal = task.dueDate || new Date().toISOString().split('T')[0];
+  let [y, m, d] = currentVal.split('-').map(Number);
+  let debounceTimer: ReturnType<typeof setTimeout>;
+
+  const updateDate = () => {
+    const maxDays = new Date(y, m, 0).getDate();
+    if (d > maxDays) d = maxDays;
+    
+    const newDateStr = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    yearEl.textContent = String(y);
+    monthEl.textContent = String(m).padStart(2, '0');
+    dayEl.textContent = String(d).padStart(2, '0');
+
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(async () => {
+      await fetchJson<Task>(`/api/tasks/${task.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dueDate: newDateStr }),
+      });
+      await loadBoard(task.id);
+      renderDashboardTodos();
+    }, 600);
+  };
+
+  const handleWheel = (el: Element, type: 'y'|'m'|'d') => {
+    el.addEventListener('wheel', (e: Event) => {
+      const wheelEvent = e as WheelEvent;
+      wheelEvent.preventDefault();
+      const delta = Math.sign(wheelEvent.deltaY) > 0 ? -1 : 1;
+      if (type === 'y') y += delta;
+      if (type === 'm') {
+        m += delta;
+        if (m > 12) { m = 1; y++; }
+        if (m < 1) { m = 12; y--; }
+      }
+      if (type === 'd') {
+        d += delta;
+        const maxDays = new Date(y, m, 0).getDate();
+        if (d > maxDays) { d = 1; m++; if(m>12){m=1;y++;} }
+        if (d < 1) { m--; if(m<1){m=12;y--;}; d = new Date(y, m, 0).getDate(); }
+      }
+      updateDate();
+    });
+  };
+
+  handleWheel(yearEl, 'y');
+  handleWheel(monthEl, 'm');
+  handleWheel(dayEl, 'd');
+}
+
+async function renderTaskDetail(task: Task): Promise<void> {
+  const taskDetailData = await fetchJson<Task>(`/api/tasks/${task.id}`);
+
+  const currentVal = taskDetailData.dueDate || new Date().toISOString().split('T')[0];
+  const [y, m, d] = currentVal.split('-').map(Number);
+  const isDue = isOverdue(taskDetailData);
+
+  safeTaskDetail.innerHTML = `
+    <div class="d-section">
+      <div class="d-box" style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
+        <div>
+          <div class="d-label">负责人</div>
+          ${createTaskOwnerDropdownHTML(taskDetailData)}
+        </div>
+        <div>
+          <div class="d-label">当前状态</div>
+          ${createStatusActions(taskDetailData)}
+        </div>
+        <div>
+          <div class="d-label" style="display:flex; gap:4px; align-items:center;">
+             规定截止 <span style="font-size:11px; opacity:0.6; font-weight:normal;">(滚轮调整)</span>
+          </div>
+          <div class="date-scroll-picker" style="color:${isDue ? 'var(--danger)' : 'inherit'}; margin-top:2px;">
+            <span class="date-part year" tabindex="0">${y}</span>/
+            <span class="date-part month" tabindex="0">${String(m).padStart(2, '0')}</span>/
+            <span class="date-part day" tabindex="0">${String(d).padStart(2, '0')}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="d-section">
+      <div class="d-label">任务描述 & 标题</div>
+      <h3 style="font-size:18px; margin-bottom:8px;">${taskDetailData.title}</h3>
+      <p style="color:var(--text-muted); margin:0;">${taskDetailData.description || '暂无描述'}</p>
+    </div>
+    <div class="d-section">
+      <div class="d-label">验收标准 (Acceptance Criteria)</div>
+      <div class="d-box">${taskDetailData.acceptanceCriteria ?? '暂无验收标准'}</div>
+    </div>
+    <div class="d-section">
+      <div class="d-label">来源语句</div>
+      <div class="d-box">${taskDetailData.sourceText || '暂无'}</div>
+    </div>
+  `;
+
+  safeTaskDetail.querySelectorAll<HTMLButtonElement>('[data-next-status]').forEach((button) => {
+    button.addEventListener('click', async (event) => {
+      event.stopPropagation();
+      const nextStatus = button.dataset.nextStatus as TaskStatus;
+      if (!nextStatus || taskDetailData.status === nextStatus) return;
+      await updateTaskStatus(taskDetailData, nextStatus);
+    });
+  });
+
+  setupEditableTaskFields(safeTaskDetail, taskDetailData);
+}
 function bindBoardEvents(columns: BoardColumn[]): void {
   const allTasks = columns.flatMap((column) => column.items);
 
   safeBoardColumns.querySelectorAll<HTMLElement>('[data-task-card-id]').forEach((card) => {
     card.addEventListener('click', async () => {
       const taskId = card.dataset.taskCardId;
-      const task = allTasks.find((item) => item.id === taskId);
+      if (!taskId) return;
 
-      if (!task) {
-        return;
-      }
+      const task = allTasks.find((item) => item.id === taskId);
+      if (!task) return;
 
       selectedTaskId = task.id;
-      renderBoard(columns);
-      bindBoardEvents(columns);
+      
+      // Select the exact card without re-rendering the board to preserve events
+      safeBoardColumns.querySelectorAll<HTMLElement>('[data-task-card-id]').forEach((c) => {
+        c.classList.toggle('selected', c.dataset.taskCardId === taskId);
+      });
+
       await renderTaskDetail(task);
-    });
-  });
-
-  safeBoardColumns.querySelectorAll<HTMLButtonElement>('[data-next-status]').forEach((button) => {
-    button.addEventListener('click', async (event) => {
-      event.stopPropagation();
-      const taskId = button.dataset.taskId;
-      const nextStatus = button.dataset.nextStatus as TaskStatus;
-      const task = allTasks.find((item) => item.id === taskId);
-
-      if (!task || !nextStatus || task.status === nextStatus) {
-        return;
+      const safeTaskDrawer = document.getElementById('task-drawer');
+      if (safeTaskDrawer) {
+        safeTaskDrawer.classList.add('open');
       }
-
-      await updateTaskStatus(task, nextStatus);
     });
   });
 }
-
 async function loadBoard(preferredTaskId?: string | null): Promise<void> {
   try {
     const [board, stats] = await Promise.all([
@@ -1116,37 +1698,31 @@ safeRefreshButton.addEventListener('click', async () => {
   await loadResources();
 });
 
-safeStatusFilter.addEventListener('change', async () => {
-  boardFilters.status = safeStatusFilter.value as BoardFilters['status'];
+// safeStatusFilter.addEventListener('change', async () => {
+//   boardFilters.status = safeStatusFilter.value as BoardFilters['status'];
+//
+//   if (latestBoardData) {
+//     await renderBoardView(filterBoard(latestBoardData), selectedTaskId);
+//   }
+// });
 
-  if (latestBoardData) {
-    await renderBoardView(filterBoard(latestBoardData), selectedTaskId);
-  }
-});
-
-safeOwnerFilter.addEventListener('change', async () => {
-  boardFilters.ownerName = safeOwnerFilter.value;
-
-  if (latestBoardData) {
-    await renderBoardView(filterBoard(latestBoardData), selectedTaskId);
-  }
-});
-
-safeRiskFilter.addEventListener('change', async () => {
-  boardFilters.risk = safeRiskFilter.value as BoardFilters['risk'];
-
-  if (latestBoardData) {
-    await renderBoardView(filterBoard(latestBoardData), selectedTaskId);
-  }
-});
+// safeRiskFilter.addEventListener('change', async () => {
+//   boardFilters.risk = safeRiskFilter.value as BoardFilters['risk'];
+//
+//   if (latestBoardData) {
+//     await renderBoardView(filterBoard(latestBoardData), selectedTaskId);
+//   }
+// });
 
 safeResetFiltersButton.addEventListener('click', async () => {
   boardFilters.status = 'all';
   boardFilters.ownerName = 'all';
   boardFilters.risk = 'all';
-  safeStatusFilter.value = 'all';
-  safeOwnerFilter.value = 'all';
-  safeRiskFilter.value = 'all';
+  // safeStatusFilter.value = 'all';
+  // safeRiskFilter.value = 'all';
+  renderStatusFilter();
+  renderRiskFilter();
+  renderOwnerFilter();
 
   if (latestBoardData) {
     await renderBoardView(filterBoard(latestBoardData), selectedTaskId);
@@ -1185,6 +1761,7 @@ safeClearMeetingMembersButton.addEventListener('click', () => {
   clearCreateMeetingMemberSelection();
 });
 
+bindTeamSwitcherEvents();
 loadSamplePayload();
 void loadBoard();
 void loadResources();
