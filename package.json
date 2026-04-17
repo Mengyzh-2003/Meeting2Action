@@ -1,0 +1,19 @@
+{
+  "name": "meeting2action",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev:api": "tsx apps/api/src/main.ts",
+    "start:api": "tsx apps/api/src/main.ts",
+    "dev:web": "esbuild apps/web/src/main.ts --bundle --outfile=apps/web/dist/main.js --servedir=apps/web --serve=127.0.0.1:3000",
+    "build:web": "esbuild apps/web/src/main.ts --bundle --outfile=apps/web/dist/main.js",
+    "check:api": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "esbuild": "^0.25.3",
+    "tsx": "^4.20.0",
+    "typescript": "^5.8.3"
+  }
+}

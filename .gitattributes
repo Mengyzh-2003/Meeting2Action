@@ -1,0 +1,7 @@
+* text=auto
+
+# Keep shell scripts/platform scripts with expected line endings when checked out.
+*.sh text eol=lf
+*.ps1 text eol=crlf
+*.bat text eol=crlf
+*.cmd text eol=crlf

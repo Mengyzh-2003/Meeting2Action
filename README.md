@@ -198,6 +198,9 @@ packages/shared/src/
 
 - [docs/api/action-items-schema.md](docs/api/action-items-schema.md)：行动项结构定义
 - [docs/api/action-items-fields.md](docs/api/action-items-fields.md)：行动项字段说明
+- [docs/api/tasks-table.sql](docs/api/tasks-table.sql)：SQLite 版 tasks 表 SQL
+- [docs/api/members-meetings-api.md](docs/api/members-meetings-api.md)：成员与会议接口草图
+- [docs/api/seed-sample-data.sql](docs/api/seed-sample-data.sql)：SQLite 测试数据脚本
 
 ### 3.5 scripts
 
@@ -270,5 +273,10 @@ docs/product/user-flow.md
 1. 创建了第一版目录骨架。
 2. 明确了前端、后端、异步处理、共享数据层和文档层的职责。
 3. 将目录与功能说明整理到 README，便于后续直接按模块推进开发。
+4. 补充了 actionItems 的共享类型、schema 以及 SQLite 版 tasks 表 SQL。
+5. 已创建本地 SQLite 数据库文件 `data/meeting2action.db`，并成功建成 `tasks`、`members`、`meetings`、`meeting_participants` 表。
+6. 已补充 members、meetings 共享类型和成员/会议接口草图。
+7. 已建成 `task_activity_logs` 表，并写入第一批任务活动日志样例。
+8. 已导入第一批本地测试数据，可直接用于接口开发和页面联调。
 
 如果下一步开始真正编码，建议先从 `packages/shared` 中的 actionItems schema 和 `apps/api` 中的任务接口开始，因为这两部分会决定前后端联调效率和后续模块扩展成本。

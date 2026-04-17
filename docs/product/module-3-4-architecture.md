@@ -257,10 +257,18 @@ GET    /api/tasks/:id
 
 但从答辩和演示完整度考虑，建议把 `meetings` 也加上，这样“任务来源于哪次会议”就能讲完整。
 
+当前已补充 SQLite 版 `tasks` 表 SQL，见 [../api/tasks-table.sql](../api/tasks-table.sql)。
+
+当前项目已在本地 SQLite 数据库 `data/meeting2action.db` 中成功创建 `tasks` 表，可直接作为后续导入接口和看板查询的基础数据表。
+
+当前项目也已完成 `members`、`meetings`、`meeting_participants` 三张表的 SQLite 建表，并导入了第一批测试数据，可用于负责人选择、会议来源绑定和联调演示。
+
+当前项目也已完成 `task_activity_logs` 表的 SQLite 建表，并写入了任务创建、状态变更等日志样例，可用于任务详情页中的活动记录展示。
+
 ## 9. 当前最推荐的开发顺序
 
 1. 先固定 `actionItems` 数据结构。
-2. 先做任务导入接口和 `tasks` 表。
+2. 先做任务导入接口，核心数据表已完成 SQLite 建表。
 3. 再做看板查询接口和看板页。
 4. 最后补统计面板和简版周报摘要。
 
