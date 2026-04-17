@@ -1,4 +1,4 @@
-# 模块 3-4 前后端与数据库框架图
+# 模块 3-4 前后端与数据库框架图（当前实现版）
 
 本文档聚焦 A 组当前负责的两部分能力：
 
@@ -9,22 +9,23 @@
 
 ## 1. 总体职责划分
 
-### 前端 Web
+### 前端 Web（已实现）
 
-- 导入确认页：确认 AI 提取出的行动项
-- 看板页：按状态展示任务
-- 任务详情页：展示描述、验收标准、来源语句、截止时间
-- 统计面板：展示总任务数、逾期任务数、完成率等
+- 导入确认页：确认结构化行动项后导入
+- 看板页：按状态展示任务并支持筛选
+- 任务详情页：支持负责人切换、状态流转、截止时间滚轮编辑
+- 统计面板：展示总任务数、状态分布、风险分布
 
-### 后端 API
+### 后端 API（已实现）
 
 - 接收 `actionItems`
 - 将 `actionItems` 转换为内部 `tasks`
-- 提供任务增删改查接口
+- 提供任务、成员、会议相关接口
 - 提供看板聚合与统计接口
+- 提供任务活动记录接口
 - 为后续提醒、周报等能力预留扩展点
 
-### 数据库
+### 数据库（已实现）
 
 - 持久化会议、任务、成员、任务操作记录
 - 支撑看板查询、状态流转和统计分析
@@ -36,7 +37,7 @@ flowchart LR
     A[模块2 AI解析结果\nactionItems JSON] --> B[前端导入确认页\nImport Review]
     B --> C[后端任务导入接口\nPOST /api/tasks/import-from-action-items]
     C --> D[任务分发服务\nAssignment Service]
-    D --> E[(MySQL / PostgreSQL)]
+    D --> E[(SQLite)]
 
     E --> F[任务查询接口\nGET /api/tasks]
     E --> G[看板聚合接口\nGET /api/board]
@@ -148,24 +149,26 @@ erDiagram
 
     MEETINGS {
         string id PK
-        string title
-        text summary
-        text source_text
+        string topic
+        string meeting_time
+        string location
         datetime created_at
+        datetime updated_at
     }
 
     MEMBERS {
         string id PK
         string name
-        string email
-        string role
+        string grade
+        string degree_type
         datetime created_at
+        datetime updated_at
     }
 
     TASKS {
         string id PK
         string meeting_id FK
-        string owner_id FK
+        string owner_name
         string title
         text description
         string priority
@@ -241,36 +244,24 @@ GET    /api/board/stats
 GET    /api/tasks/:id
 ```
 
-## 8. 最小数据库表
+## 8. 数据库表（当前）
 
-本周最小可行版本建议先建 4 张表：
-
-- `meetings`：记录会议摘要和来源文本
-- `tasks`：记录任务核心信息
-- `members`：记录负责人信息
-- `task_activity_logs`：记录状态变更和编辑操作
-
-如果时间紧，可以先只建：
+当前已建成并使用以下核心表：
 
 - `tasks`
 - `members`
+- `meetings`
+- `meeting_participants`
+- `task_activity_logs`
 
-但从答辩和演示完整度考虑，建议把 `meetings` 也加上，这样“任务来源于哪次会议”就能讲完整。
+数据库文件位于 `data/meeting2action.db`。
 
-当前已补充 SQLite 版 `tasks` 表 SQL，见 [../api/tasks-table.sql](../api/tasks-table.sql)。
+## 9. 下一阶段推荐顺序
 
-当前项目已在本地 SQLite 数据库 `data/meeting2action.db` 中成功创建 `tasks` 表，可直接作为后续导入接口和看板查询的基础数据表。
-
-当前项目也已完成 `members`、`meetings`、`meeting_participants` 三张表的 SQLite 建表，并导入了第一批测试数据，可用于负责人选择、会议来源绑定和联调演示。
-
-当前项目也已完成 `task_activity_logs` 表的 SQLite 建表，并写入了任务创建、状态变更等日志样例，可用于任务详情页中的活动记录展示。
-
-## 9. 当前最推荐的开发顺序
-
-1. 先固定 `actionItems` 数据结构。
-2. 先做任务导入接口，核心数据表已完成 SQLite 建表。
-3. 再做看板查询接口和看板页。
-4. 最后补统计面板和简版周报摘要。
+1. 补后端数据约束与错误码规范（成员同名、输入校验）。
+2. 补任务搜索/排序/手动创建。
+3. 推进看板过滤后端下推。
+4. 最后补周报与提醒等加分项。
 
 这样做的原因很直接：
 
