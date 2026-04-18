@@ -36,6 +36,7 @@ export interface TaskActivityLog {
 
 export interface ImportActionItemsInput {
   meetingId?: string | null;
+  intakeId?: string | null;
   operatorName?: string;
   actionItems: Array<{
     id: string;

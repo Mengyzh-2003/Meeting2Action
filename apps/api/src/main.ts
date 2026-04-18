@@ -7,6 +7,9 @@ import { createSqliteDatabaseClient } from './db/sqlite-client';
 import { MeetingController } from './modules/meeting/meeting.controller';
 import { createMeetingRoutes } from './modules/meeting/meeting.routes';
 import { MeetingService } from './modules/meeting/meeting.service';
+import { IntakeController } from './modules/intake/intake.controller';
+import { createIntakeRoutes } from './modules/intake/intake.routes';
+import { IntakeService } from './modules/intake/intake.service';
 import { MemberController } from './modules/member/member.controller';
 import { createMemberRoutes } from './modules/member/member.routes';
 import { MemberService } from './modules/member/member.service';
@@ -86,13 +89,16 @@ async function bootstrap(): Promise<void> {
   const taskService = new TaskService(databaseClient);
   const memberService = new MemberService(databaseClient);
   const meetingService = new MeetingService(databaseClient);
+  const intakeService = new IntakeService(databaseClient, taskService);
   const taskController = new TaskController(taskService);
   const memberController = new MemberController(memberService);
   const meetingController = new MeetingController(meetingService);
+  const intakeController = new IntakeController(intakeService);
   const routes = [
     ...createTaskRoutes(taskController),
     ...createMemberRoutes(memberController),
     ...createMeetingRoutes(meetingController),
+    ...createIntakeRoutes(intakeController),
   ];
   const port = Number(process.env.PORT ?? 3001);
   const host = process.env.HOST ?? '127.0.0.1';
@@ -152,6 +158,7 @@ async function bootstrap(): Promise<void> {
     console.log('Board routes: GET /api/board, GET /api/board/stats');
     console.log('Member routes: GET /api/members, GET /api/members/:id, POST /api/members, PATCH /api/members/:id, DELETE /api/members/:id');
     console.log('Meeting routes: GET /api/meetings, GET /api/meetings/:id, GET /api/meetings/:id/participants, POST /api/meetings, PATCH /api/meetings/:id, PATCH /api/meetings/:id/participants, DELETE /api/meetings/:id');
+    console.log('Intake routes: GET /api/meeting-intakes, GET /api/meeting-intakes/:id, POST /api/meeting-intakes/parse, POST /api/meeting-intakes/:id/import-to-board');
   });
 }
 

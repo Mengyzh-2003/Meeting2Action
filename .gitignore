@@ -1,11 +1,15 @@
 # Dependencies
 node_modules/
+.tools/
+.npm-cache/
 
 # Build outputs
 apps/web/dist/
 
 # Local runtime data
 data/*.db
+.logs/
+node-v*.zip
 
 # Logs
 *.log

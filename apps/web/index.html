@@ -144,7 +144,7 @@
             </div>
           </div>
           <div class="chat-stream">
-            <div class="import-meta-grid" style="display:flex; gap:16px; margin-bottom: 16px;">
+            <div class="import-meta-grid" style="display:flex; gap:16px; margin-bottom: 16px; flex-wrap: wrap;">
               <label style="flex:1;">
                 <span style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px;">会议ID</span>
                 <input id="meeting-id-input" value="meeting_001" class="apple-input" />
@@ -153,16 +153,37 @@
                 <span style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px;">操作人</span>
                 <input id="operator-name-input" value="蒙亚舟" class="apple-input" />
               </label>
+              <label style="flex:1;">
+                <span style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px;">解析模式</span>
+                <select id="parser-mode-input" class="apple-select">
+                  <option value="auto">Auto</option>
+                  <option value="heuristic">Heuristic</option>
+                  <option value="llm">LLM</option>
+                </select>
+              </label>
             </div>
-            <textarea id="import-json" rows="18" class="apple-textarea" placeholder="粘贴 JSON 数组 或 文本..."></textarea>
+            <div style="display:flex; gap:12px; align-items:center; margin-bottom: 12px; flex-wrap: wrap;">
+              <label class="apple-secondary-btn small-btn" style="cursor:pointer;">
+                上传文本文件
+                <input id="source-file-input" type="file" accept=".txt,.md,.json,.csv" style="display:none;" />
+              </label>
+              <span id="source-file-name" style="font-size:12px; color:var(--text-muted);">未选择文件</span>
+            </div>
+            <textarea id="import-json" rows="18" class="apple-textarea" placeholder="粘贴会议纪要、转写文本，或上传文本文件..."></textarea>
             <div id="import-feedback" class="import-feedback empty-state mt-10">等待载入数据...</div>
           </div>
         </div>
 
         <div class="chat-panel" style="background:var(--bg-body); border:none; box-shadow:none;">
           <div class="panel-header" style="background:transparent; padding: 0 0 16px 0; border:none;">
-            <h3 style="font-size:18px;">✨ 待确认行动项清单</h3>
+            <h3 style="font-size:18px;">待确认行动项清单</h3>
             <button id="submit-import" class="apple-primary-btn">一键导入工作台</button>
+          </div>
+          <div class="card-base" style="margin-bottom:16px; padding:16px;">
+            <div class="dash-section-title" style="margin-bottom:12px;">
+              <h3 style="font-size:15px;">最近解析记录</h3>
+            </div>
+            <div id="intake-history" class="activity-feed empty-state">暂无解析记录</div>
           </div>
           <div class="review-panel" style="flex-grow:1;">
             <div id="import-preview" class="import-preview empty-state" style="background:var(--bg-card);border-radius:var(--radius-lg);padding:20px;height:100%;">

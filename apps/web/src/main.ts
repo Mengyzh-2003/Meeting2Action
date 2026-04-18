@@ -85,6 +85,31 @@ interface ImportResponse {
   count: number;
 }
 
+interface MeetingIntake {
+  id: string;
+  meetingId: string | null;
+  operatorName: string;
+  sourceType: 'text' | 'file';
+  sourceName: string | null;
+  sourceContent: string;
+  normalizedContent: string;
+  parserMode: 'auto' | 'heuristic' | 'llm';
+  parserEngine: string;
+  status: 'parsed' | 'failed' | 'imported';
+  summary: string | null;
+  actionItems: ActionItem[];
+  errorMessage: string | null;
+  createdAt: string;
+  updatedAt: string;
+  parsedAt: string | null;
+  importedAt: string | null;
+}
+
+interface ParseMeetingResponse {
+  intake: MeetingIntake;
+  payload: ActionItemsPayload;
+}
+
 interface Member {
   id: string;
   name: string;
@@ -124,39 +149,13 @@ interface ListResponse<T> {
 }
 
 const API_BASE_URL = 'http://127.0.0.1:3001';
-const SAMPLE_IMPORT_PAYLOAD: ActionItemsPayload = {
-  summary: '本次会议主要围绕实验复现、字段映射和看板联调展开。',
-  actionItems: [
-    {
-      id: 'demo_101',
-      title: '补全导入确认页联调说明',
-      description: '整理导入确认页的输入格式、字段含义和提交链路，方便模块 2 与模块 3 联调。',
-      ownerName: '蒙亚舟',
-      dueDate: '2026-04-21',
-      priority: 'high',
-      status: 'todo',
-      acceptanceCriteria: '输出一份导入链路说明，并完成页面自测。',
-      sourceText: '蒙亚舟把导入确认页这块的联调链路整理一下。',
-      sourceTimestamp: '00:08:12',
-      confidence: 0.91,
-      tags: ['联调', '导入页'],
-    },
-    {
-      id: 'demo_102',
-      title: '确认任务卡片字段展示',
-      description: '对齐看板卡片上要展示的负责人、截止日期和优先级字段。',
-      ownerName: '马瑀阔',
-      dueDate: '2026-04-22',
-      priority: 'medium',
-      status: 'todo',
-      acceptanceCriteria: '完成卡片字段清单并在页面中展示。',
-      sourceText: '马瑀阔确认一下任务卡片具体要显示哪些字段。',
-      sourceTimestamp: '00:11:20',
-      confidence: 0.87,
-      tags: ['看板', '字段'],
-    },
-  ],
-};
+const SAMPLE_MEETING_NOTE = `会议主题：多模态目标检测项目周例会
+
+导师：下周之前先把 Transformer 基线和 ResNet 基线的对比实验跑完，结果整理成表格。
+小王负责清洗新增的夜间场景数据，这周五前给我一个可用的数据集版本。
+蒙亚舟需要把前端导入链路整理一下，补充上传文本文件和解析预览的交互说明。
+马璐阳跟进后端接口，把会议原文和行动项解析记录落库，周一同步联调结果。
+如果时间允许，再补一版答辩汇报 PPT，把项目定位和功能矩阵说清楚。`;
 
 const statsPanel = document.querySelector<HTMLDivElement>('#stats-panel');
 const boardColumns = document.querySelector<HTMLDivElement>('#board-columns');
@@ -170,6 +169,10 @@ const importPreview = document.querySelector<HTMLDivElement>('#import-preview');
 const importFeedback = document.querySelector<HTMLDivElement>('#import-feedback');
 const meetingIdInput = document.querySelector<HTMLInputElement>('#meeting-id-input');
 const operatorNameInput = document.querySelector<HTMLInputElement>('#operator-name-input');
+const parserModeInput = document.querySelector<HTMLSelectElement>('#parser-mode-input');
+const sourceFileInput = document.querySelector<HTMLInputElement>('#source-file-input');
+const sourceFileName = document.querySelector<HTMLSpanElement>('#source-file-name');
+const intakeHistory = document.querySelector<HTMLDivElement>('#intake-history');
 // const statusFilter = document.querySelector<HTMLSelectElement>('#status-filter');
 const statusDropdownMenu = document.querySelector<HTMLDivElement>('#status-dropdown-menu');
 const statusFilterBadge = document.querySelector<HTMLDivElement>('#status-filter-badge');
@@ -218,10 +221,13 @@ const dashboardDetailContentBody = document.querySelector<HTMLDivElement>('#dash
 let selectedTaskId: string | null = null;
 let selectedDashboardTaskId: string | null = null;
 let draftActionItems: ActionItem[] = [];
+let draftSummary = '';
+let currentParsedIntakeId: string | null = null;
 let latestBoardData: BoardResponse | null = null;
 let latestBoardStats: BoardStats | null = null;
 let latestMembers: Member[] = [];
 let latestMeetings: Meeting[] = [];
+let latestIntakes: MeetingIntake[] = [];
 let currentUserMemberId: string | null = null;
 const boardFilters: BoardFilters = {
   status: 'all',
@@ -249,6 +255,10 @@ const safeImportPreview = assertElement(importPreview, 'import preview not found
 const safeImportFeedback = assertElement(importFeedback, 'import feedback not found');
 const safeMeetingIdInput = assertElement(meetingIdInput, 'meeting id input not found');
 const safeOperatorNameInput = assertElement(operatorNameInput, 'operator name input not found');
+const safeParserModeInput = assertElement(parserModeInput, 'parser mode input not found');
+const safeSourceFileInput = assertElement(sourceFileInput, 'source file input not found');
+const safeSourceFileName = assertElement(sourceFileName, 'source file name not found');
+const safeIntakeHistory = assertElement(intakeHistory, 'intake history not found');
 // const safeStatusFilter = assertElement(statusFilter, 'status filter not found');
 const safeStatusDropdownMenu = assertElement(statusDropdownMenu, 'status dropdown menu not found');
 const safeStatusFilterDot = assertElement(statusFilterDot, 'status filter dot');
@@ -385,18 +395,32 @@ function normalizeActionItem(rawItem: Partial<ActionItem> & { id?: string; title
   };
 }
 
+function isLikelyJsonPayload(rawText: string): boolean {
+  const trimmed = rawText.trim();
+  return trimmed.startsWith('{') || trimmed.startsWith('[');
+}
+
 function parseImportPayload(rawText: string): ActionItem[] {
   const parsed = JSON.parse(rawText) as ActionItemsPayload | ActionItem[];
 
   if (Array.isArray(parsed)) {
     return parsed.map(normalizeActionItem);
   }
-
+  throw new Error('JSON 中未找到 actionItems 数组。');
   if (Array.isArray(parsed.actionItems)) {
     return parsed.actionItems.map(normalizeActionItem);
   }
 
   throw new Error('JSON 中未找到 actionItems 数组。');
+}
+
+function formatDateTime(dateString: string | null): string {
+  if (!dateString) {
+    return '未记录';
+  }
+
+  const date = new Date(dateString);
+  return Number.isNaN(date.getTime()) ? dateString : date.toLocaleString('zh-CN', { hour12: false });
 }
 
 function createImportCard(item: ActionItem, index: number): string {
@@ -506,25 +530,123 @@ function renderImportPreview(): void {
   }
 
   safeImportPreview.className = 'import-preview';
-  safeImportPreview.innerHTML = draftActionItems.map(createImportCard).join('');
+  const summaryCard = `
+    <article class="import-item-card" style="border:1px solid var(--border-light); background:var(--bg-body);">
+      <div class="import-item-header">
+        <div>
+          <p class="import-item-index">会议摘要</p>
+          <h3>AI 解析摘要</h3>
+        </div>
+        ${currentParsedIntakeId ? `<span class="priority-tag priority-medium">${escapeHtml(currentParsedIntakeId)}</span>` : ''}
+      </div>
+      <p style="color:var(--text-muted); margin:0; line-height:1.6;">${escapeHtml(draftSummary || '暂无描述')}</p>
+    </article>
+  `;
+  safeImportPreview.innerHTML = summaryCard + draftActionItems.map(createImportCard).join('');
   bindImportPreviewEvents();
 }
 
-function loadSamplePayload(): void {
-  safeImportJsonTextarea.value = JSON.stringify(SAMPLE_IMPORT_PAYLOAD, null, 2);
-  setImportFeedback('示例数据已载入，可以直接解析预览。');
+function renderIntakeHistory(): void {
+  if (latestIntakes.length === 0) {
+    safeIntakeHistory.className = 'activity-feed empty-state';
+    safeIntakeHistory.textContent = '暂无来源语句';
+    return;
+  }
+
+  safeIntakeHistory.className = 'activity-feed';
+  safeIntakeHistory.innerHTML = latestIntakes
+    .slice(0, 8)
+    .map((intake) => `
+      <div class="feed-item" data-intake-id="${escapeHtml(intake.id)}" style="cursor:pointer;">
+        <div class="feed-icon">${intake.status === 'imported' ? '?' : 'AI'}</div>
+        <div class="feed-content">
+          <p>${escapeHtml(intake.summary ?? intake.sourceContent.slice(0, 48))}</p>
+          <span>${escapeHtml(formatDateTime(intake.parsedAt ?? intake.createdAt))} · ${escapeHtml(intake.parserEngine)}</span>
+        </div>
+      </div>
+    `)
+    .join('');
+
+  safeIntakeHistory.querySelectorAll<HTMLElement>('[data-intake-id]').forEach((item) => {
+    item.addEventListener('click', () => {
+      const intakeId = item.dataset.intakeId;
+      const intake = latestIntakes.find((entry) => entry.id === intakeId);
+      if (!intake) {
+        return;
+      }
+
+      safeImportJsonTextarea.value = intake.sourceContent;
+      safeSourceFileName.textContent = intake.sourceName ?? (intake.sourceType === 'file' ? '上传文件' : '手动输入');
+      safeParserModeInput.value = intake.parserMode;
+      draftActionItems = intake.actionItems.map(normalizeActionItem);
+      draftSummary = intake.summary ?? '';
+      currentParsedIntakeId = intake.id;
+      renderImportPreview();
+      setImportFeedback(`已加载解析记录 ${intake.id}。`, 'success');
+    });
+  });
 }
 
-function previewImportPayload(): void {
+async function loadIntakes(): Promise<void> {
+  const response = await fetchJson<ListResponse<MeetingIntake>>('/api/meeting-intakes');
+  latestIntakes = response.items;
+  renderIntakeHistory();
+}
+
+function loadSamplePayload(): void {
+  safeImportJsonTextarea.value = SAMPLE_MEETING_NOTE;
+  safeSourceFileName.textContent = '暂无来源语句';
+  setImportFeedback('已载入示例会议纪要，可以直接点击解析。');
+}
+
+async function previewImportPayload(): Promise<void> {
+  const rawText = safeImportJsonTextarea.value.trim();
+
+  if (!rawText) {
+    draftActionItems = [];
+    draftSummary = '';
+    currentParsedIntakeId = null;
+    renderImportPreview();
+    setImportFeedback('请先输入会议纪要文本或上传文本文件。', 'error');
+    return;
+  }
+
   try {
-    draftActionItems = parseImportPayload(safeImportJsonTextarea.value.trim());
+    if (isLikelyJsonPayload(rawText)) {
+      draftActionItems = parseImportPayload(rawText);
+      draftSummary = '当前预览来自手工 JSON 输入。';
+      currentParsedIntakeId = null;
+    } else {
+      const response = await fetchJson<ParseMeetingResponse>('/api/meeting-intakes/parse', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          meetingId: safeMeetingIdInput.value.trim() || null,
+          operatorName: safeOperatorNameInput.value.trim() || '????',
+          parserMode: safeParserModeInput.value,
+          sourceType: safeSourceFileInput.files?.[0] ? 'file' : 'text',
+          sourceName: safeSourceFileInput.files?.[0]?.name ?? null,
+          content: rawText,
+        }),
+      });
+
+      draftActionItems = response.payload.actionItems.map(normalizeActionItem);
+      draftSummary = response.payload.summary;
+      currentParsedIntakeId = response.intake.id;
+      await loadIntakes();
+    }
+
     renderImportPreview();
     setImportFeedback(`已解析 ${draftActionItems.length} 条行动项，请确认后导入。`, 'success');
   } catch (error) {
     draftActionItems = [];
+    draftSummary = '';
+    currentParsedIntakeId = null;
     renderImportPreview();
-    const message = error instanceof Error ? error.message : '解析失败';
-    setImportFeedback(`解析失败：${message}`, 'error');
+    const message = error instanceof Error ? error.message : '????';
+    setImportFeedback(`?????${message}`, 'error');
   }
 }
 
@@ -538,23 +660,34 @@ async function submitImportPayload(): Promise<void> {
   setImportFeedback('正在导入任务，请稍候...');
 
   try {
-    const response = await fetchJson<ImportResponse>('/api/tasks/import-from-action-items', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        meetingId: safeMeetingIdInput.value.trim() || null,
-        operatorName: safeOperatorNameInput.value.trim() || '蒙亚舟',
-        actionItems: draftActionItems,
-      }),
-    });
+    const response = currentParsedIntakeId
+      ? await fetchJson<ImportResponse>(`/api/meeting-intakes/${currentParsedIntakeId}/import-to-board`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            operatorName: safeOperatorNameInput.value.trim() || '????',
+          }),
+        })
+      : await fetchJson<ImportResponse>('/api/tasks/import-from-action-items', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            meetingId: safeMeetingIdInput.value.trim() || null,
+            operatorName: safeOperatorNameInput.value.trim() || '????',
+            actionItems: draftActionItems,
+          }),
+        });
 
     setImportFeedback(`导入成功，共生成 ${response.count} 条任务。`, 'success');
+    await loadIntakes();
     await loadBoard(response.items[0]?.id ?? selectedTaskId);
   } catch (error) {
-    const message = error instanceof Error ? error.message : '导入失败';
-    setImportFeedback(`导入失败：${message}`, 'error');
+    const message = error instanceof Error ? error.message : '????';
+    setImportFeedback(`?????${message}`, 'error');
   } finally {
     safeSubmitImportButton.disabled = false;
   }
@@ -1733,12 +1866,25 @@ safeLoadSampleButton.addEventListener('click', () => {
   loadSamplePayload();
 });
 
-safePreviewImportButton.addEventListener('click', () => {
-  previewImportPayload();
+safePreviewImportButton.addEventListener('click', async () => {
+  await previewImportPayload();
 });
 
 safeSubmitImportButton.addEventListener('click', async () => {
   await submitImportPayload();
+});
+
+safeSourceFileInput.addEventListener('change', async () => {
+  const file = safeSourceFileInput.files?.[0];
+
+  if (!file) {
+    safeSourceFileName.textContent = '未选择文件';
+    return;
+  }
+
+  safeSourceFileName.textContent = file.name;
+  safeImportJsonTextarea.value = await file.text();
+  setImportFeedback(`已载入文件 ${file.name}，可以开始解析。`, 'success');
 });
 
 safeRefreshMembersButton.addEventListener('click', async () => {
@@ -1765,3 +1911,4 @@ bindTeamSwitcherEvents();
 loadSamplePayload();
 void loadBoard();
 void loadResources();
+void loadIntakes();
