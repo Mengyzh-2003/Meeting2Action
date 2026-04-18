@@ -39,4 +39,12 @@ export class IntakeController {
     const result = await this.intakeService.importToBoard(request.params.id, request.body);
     response.status(201).json(result);
   };
+
+  deleteIntake = async (
+    request: RequestLike,
+    response: ResponseLike,
+  ): Promise<void> => {
+    const result = await this.intakeService.deleteIntake(request.params.id);
+    response.status(200).json(result);
+  };
 }

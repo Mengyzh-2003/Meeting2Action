@@ -31,5 +31,14 @@ export function createIntakeRoutes(intakeController: IntakeController): RouteDef
         return { id: match?.[1] ?? '' };
       },
     },
+    {
+      method: 'DELETE',
+      pattern: /^\/api\/meeting-intakes\/([^/]+)$/,
+      handler: intakeController.deleteIntake,
+      getParams: (pathname) => {
+        const match = pathname.match(/^\/api\/meeting-intakes\/([^/]+)$/);
+        return { id: match?.[1] ?? '' };
+      },
+    },
   ];
 }

@@ -26,6 +26,7 @@ type TaskRow = {
   id: string;
   source_action_item_id: string;
   meeting_id: string | null;
+  owner_member_id: string | null;
   title: string;
   description: string;
   owner_name: string | null;
@@ -46,6 +47,7 @@ function mapTaskRow(row: TaskRow): Task {
     id: row.id,
     sourceActionItemId: row.source_action_item_id,
     meetingId: row.meeting_id,
+    ownerMemberId: row.owner_member_id,
     title: row.title,
     description: row.description,
     ownerName: row.owner_name,
@@ -101,6 +103,64 @@ function buildBoardStats(tasks: Task[]): BoardStats {
 export class TaskService {
   constructor(private readonly db: DatabaseClient) {}
 
+  private async findMemberById(memberId: string): Promise<{ id: string; name: string } | undefined> {
+    return this.db.get<{ id: string; name: string }>(
+      `
+        SELECT id, name
+        FROM members
+        WHERE id = ?
+      `,
+      [memberId],
+    );
+  }
+
+  private async findMemberByName(name: string): Promise<{ id: string; name: string } | undefined> {
+    return this.db.get<{ id: string; name: string }>(
+      `
+        SELECT id, name
+        FROM members
+        WHERE name = ?
+        LIMIT 1
+      `,
+      [name],
+    );
+  }
+
+  private async resolveOwnerReference(input: {
+    ownerMemberId?: string | null;
+    ownerName?: string | null;
+  }): Promise<{ ownerMemberId: string | null; ownerName: string | null }> {
+    if (input.ownerMemberId) {
+      const member = await this.findMemberById(input.ownerMemberId);
+      if (!member) {
+        throw new NotFoundError(`Member ${input.ownerMemberId} not found.`);
+      }
+
+      return {
+        ownerMemberId: member.id,
+        ownerName: member.name,
+      };
+    }
+
+    if (input.ownerName) {
+      const normalizedName = input.ownerName.trim();
+      if (!normalizedName) {
+        return { ownerMemberId: null, ownerName: null };
+      }
+
+      const member = await this.findMemberByName(normalizedName);
+      return {
+        ownerMemberId: member?.id ?? null,
+        ownerName: member?.name ?? normalizedName,
+      };
+    }
+
+    return {
+      ownerMemberId: null,
+      ownerName: null,
+    };
+  }
+
   private async getTaskRowById(taskId: string): Promise<TaskRow | undefined> {
     return this.db.get<TaskRow>(
       `
@@ -108,6 +168,7 @@ export class TaskService {
           id,
           source_action_item_id,
           meeting_id,
+          owner_member_id,
           title,
           description,
           owner_name,
@@ -135,13 +196,18 @@ export class TaskService {
     for (const [index, actionItem] of input.actionItems.entries()) {
       const taskId = createTaskId(actionItem.id);
       const createdAt = new Date().toISOString();
+      const owner = await this.resolveOwnerReference({
+        ownerMemberId: actionItem.ownerMemberId,
+        ownerName: actionItem.ownerName,
+      });
       const task: Task = {
         id: taskId,
         sourceActionItemId: actionItem.id,
         meetingId: input.meetingId ?? null,
+        ownerMemberId: owner.ownerMemberId,
         title: actionItem.title,
         description: actionItem.description,
-        ownerName: actionItem.ownerName,
+        ownerName: owner.ownerName,
         dueDate: actionItem.dueDate,
         priority: actionItem.priority,
         status: actionItem.status,
@@ -160,6 +226,7 @@ export class TaskService {
             id,
             source_action_item_id,
             meeting_id,
+            owner_member_id,
             title,
             description,
             owner_name,
@@ -173,12 +240,13 @@ export class TaskService {
             tags,
             created_at,
             updated_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `,
         [
           task.id,
           task.sourceActionItemId,
           task.meetingId,
+          task.ownerMemberId,
           task.title,
           task.description,
           task.ownerName,
@@ -236,6 +304,11 @@ export class TaskService {
       params.push(query.ownerName);
     }
 
+    if (query.ownerMemberId) {
+      filters.push('owner_member_id = ?');
+      params.push(query.ownerMemberId);
+    }
+
     if (query.meetingId) {
       filters.push('meeting_id = ?');
       params.push(query.meetingId);
@@ -249,6 +322,7 @@ export class TaskService {
           id,
           source_action_item_id,
           meeting_id,
+          owner_member_id,
           title,
           description,
           owner_name,
@@ -290,11 +364,16 @@ export class TaskService {
     }
 
     const existingTask = mapTaskRow(existingRow);
+    const resolvedOwner = await this.resolveOwnerReference({
+      ownerMemberId: input.ownerMemberId !== undefined ? input.ownerMemberId : existingTask.ownerMemberId,
+      ownerName: input.ownerName !== undefined ? input.ownerName : existingTask.ownerName,
+    });
     const nextTask: Task = {
       ...existingTask,
       title: input.title ?? existingTask.title,
       description: input.description ?? existingTask.description,
-      ownerName: input.ownerName !== undefined ? input.ownerName : existingTask.ownerName,
+      ownerMemberId: resolvedOwner.ownerMemberId,
+      ownerName: resolvedOwner.ownerName,
       dueDate: input.dueDate !== undefined ? input.dueDate : existingTask.dueDate,
       priority: input.priority ?? existingTask.priority,
       status: input.status ?? existingTask.status,
@@ -309,6 +388,7 @@ export class TaskService {
         SET
           title = ?,
           description = ?,
+          owner_member_id = ?,
           owner_name = ?,
           due_date = ?,
           priority = ?,
@@ -320,6 +400,7 @@ export class TaskService {
       [
         nextTask.title,
         nextTask.description,
+        nextTask.ownerMemberId,
         nextTask.ownerName,
         nextTask.dueDate,
         nextTask.priority,
@@ -455,5 +536,21 @@ export class TaskService {
       operatorName: row.operator_name,
       createdAt: row.created_at,
     }));
+  }
+
+  async deleteTask(taskId: string): Promise<{ deleted: true; id: string }> {
+    const existingRow = await this.getTaskRowById(taskId);
+
+    if (!existingRow) {
+      throw new NotFoundError(`Task ${taskId} not found.`);
+    }
+
+    await this.db.run('DELETE FROM task_activity_logs WHERE task_id = ?', [taskId]);
+    await this.db.run('DELETE FROM tasks WHERE id = ?', [taskId]);
+
+    return {
+      deleted: true,
+      id: taskId,
+    };
   }
 }

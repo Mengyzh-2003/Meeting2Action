@@ -25,6 +25,7 @@ interface Task {
   id: string;
   sourceActionItemId: string;
   meetingId: string | null;
+  ownerMemberId: string | null;
   title: string;
   description: string;
   ownerName: string | null;
@@ -222,6 +223,7 @@ let selectedTaskId: string | null = null;
 let selectedDashboardTaskId: string | null = null;
 let draftActionItems: ActionItem[] = [];
 let draftSummary = '';
+let draftParserEngine = '';
 let currentParsedIntakeId: string | null = null;
 let latestBoardData: BoardResponse | null = null;
 let latestBoardStats: BoardStats | null = null;
@@ -406,8 +408,8 @@ function parseImportPayload(rawText: string): ActionItem[] {
   if (Array.isArray(parsed)) {
     return parsed.map(normalizeActionItem);
   }
-  throw new Error('JSON 中未找到 actionItems 数组。');
-  if (Array.isArray(parsed.actionItems)) {
+
+  if ('actionItems' in parsed && Array.isArray(parsed.actionItems)) {
     return parsed.actionItems.map(normalizeActionItem);
   }
 
@@ -483,6 +485,96 @@ function createImportCard(item: ActionItem, index: number): string {
   `;
 }
 
+function createStyledImportCard(item: ActionItem, index: number): string {
+  return `
+    <article class="aic-card" data-import-index="${index}">
+      <div class="aic-header">
+        <span class="aic-index">行动项 ${String(index + 1).padStart(2, '0')}</span>
+        <div class="aic-priority-group">
+          <button type="button" class="aic-prio-btn${item.priority === 'high' ? ' aic-prio-active' : ''}" data-prio-value="high"><span class="aic-prio-dot aic-dot-high"></span>高</button>
+          <button type="button" class="aic-prio-btn${item.priority === 'medium' ? ' aic-prio-active' : ''}" data-prio-value="medium"><span class="aic-prio-dot aic-dot-medium"></span>中</button>
+          <button type="button" class="aic-prio-btn${item.priority === 'low' ? ' aic-prio-active' : ''}" data-prio-value="low"><span class="aic-prio-dot aic-dot-low"></span>低</button>
+          <input type="hidden" data-field="priority" value="${item.priority}" />
+        </div>
+      </div>
+      <input class="aic-title-input" data-field="title" type="text" value="${escapeHtml(item.title)}" placeholder="任务标题" />
+      <div class="aic-meta-row">
+        ${(() => {
+          const ownerMember = item.ownerName ? latestMembers.find((m) => m.name === item.ownerName) : null;
+          const initialColor = ownerMember ? avatarColorByMemberId(ownerMember.id) : item.ownerName ? '#007AFF' : '#86868B';
+          return `<div class="aic-owner-pill${item.ownerName ? ' has-owner' : ''}" data-owner-pill>
+          <div class="aic-owner-avatar-sm" style="background:${initialColor};">${item.ownerName ? escapeHtml(item.ownerName.charAt(0)) : '?'}</div>
+          <span class="aic-owner-label">${item.ownerName ? escapeHtml(item.ownerName) : '未指派'}</span>
+          <span class="aic-owner-caret">▾</span>
+          <input type="hidden" data-field="ownerName" value="${escapeHtml(item.ownerName ?? '')}" />
+          <div class="aic-owner-dropdown">
+            <div class="aic-owner-option${!item.ownerName ? ' selected' : ''}" data-option-value="" data-option-color="#86868B">
+              <div class="aic-owner-option-avatar" style="background:#86868B;">?</div>
+              <span>未指派</span>
+            </div>
+            ${latestMembers.map((m) => {
+              const color = avatarColorByMemberId(m.id);
+              return `<div class="aic-owner-option${item.ownerName === m.name ? ' selected' : ''}" data-option-value="${escapeHtml(m.name)}" data-option-color="${color}">
+                <div class="aic-owner-option-avatar" style="background:${color};">${escapeHtml(m.name.charAt(0))}</div>
+                <span>${escapeHtml(m.name)}</span>
+              </div>`;
+            }).join('')}
+            ${item.ownerName && !latestMembers.some((m) => m.name === item.ownerName) ? `
+            <div class="aic-owner-option selected" data-option-value="${escapeHtml(item.ownerName)}" data-option-color="#007AFF">
+              <div class="aic-owner-option-avatar" style="background:#007AFF;">${escapeHtml(item.ownerName.charAt(0))}</div>
+              <span>${escapeHtml(item.ownerName)}</span>
+            </div>` : ''}
+          </div>
+        </div>`;
+        })()}
+        <div class="aic-meta-item" style="flex:1;">
+          <span class="aic-meta-icon">📅</span>
+          <input class="aic-meta-input aic-date-input" data-field="dueDate" type="date" value="${escapeHtml(item.dueDate ?? '')}" />
+        </div>
+      </div>
+    </article>
+  `;
+}
+
+function formatEngineLabel(engine: string): string {
+  if (engine.startsWith('claude:')) {
+    const model = engine.replace('claude:', '');
+    if (model.includes('opus')) return `✦ Claude Opus`;
+    if (model.includes('sonnet')) return `✦ Claude Sonnet`;
+    if (model.includes('haiku')) return `✦ Claude Haiku`;
+    return `✦ Claude`;
+  }
+  if (engine.startsWith('openai:')) return `⬡ ${engine.replace('openai:', '')}`;
+  if (engine === 'heuristic:fallback') return `⚙ 规则引擎（降级）`;
+  if (engine.startsWith('heuristic:')) return `⚙ 规则引擎`;
+  return engine;
+}
+
+function updateEngineLabelElement(engine: string): void {
+  const el = document.getElementById('engine-label-text');
+  if (!el) return;
+  el.textContent = engine ? `识别引擎：${formatEngineLabel(engine)}` : '识别引擎：会易达专属学术大模型 v2';
+}
+
+function createPreviewSummaryCard(): string {
+  const engineLabel = draftParserEngine ? formatEngineLabel(draftParserEngine) : '';
+  return `
+    <article class="psc-card">
+      <div class="psc-header">
+        <div class="psc-title-row">
+          <span class="psc-icon">📋</span>
+          <h3 class="psc-title">AI 解析摘要</h3>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          ${engineLabel ? `<span class="psc-engine-badge${draftParserEngine.startsWith('claude:') ? ' psc-engine-claude' : ''}">${escapeHtml(engineLabel)}</span>` : ''}
+          <span class="preview-chip preview-chip-accent">${draftActionItems.length} 条行动项</span>
+        </div>
+      </div>
+      <p class="psc-text">${escapeHtml(draftSummary || '暂无摘要内容')}</p>
+    </article>
+  `;
+}
+
 function setImportFeedback(message: string, tone: 'neutral' | 'success' | 'error' = 'neutral'): void {
   safeImportFeedback.className = `import-feedback tone-${tone}`;
   safeImportFeedback.textContent = message;
@@ -492,7 +584,7 @@ function bindImportPreviewEvents(): void {
   safeImportPreview.querySelectorAll<HTMLElement>('[data-import-index]').forEach((card) => {
     const index = Number(card.dataset.importIndex);
     card.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>('[data-field]').forEach((field) => {
-      field.addEventListener('input', () => {
+      const handleFieldChange = () => {
         const fieldName = field.dataset.field as keyof ActionItem;
         const rawValue = field.value;
 
@@ -517,6 +609,55 @@ function bindImportPreviewEvents(): void {
         }
 
         draftActionItems[index][fieldName] = rawValue as never;
+      };
+      field.addEventListener('input', handleFieldChange);
+      field.addEventListener('change', handleFieldChange);
+    });
+
+    const ownerPill = card.querySelector<HTMLElement>('[data-owner-pill]');
+    if (ownerPill) {
+      const hiddenInput = ownerPill.querySelector<HTMLInputElement>('[data-field="ownerName"]');
+      const avatarEl = ownerPill.querySelector<HTMLElement>('.aic-owner-avatar-sm');
+      const labelEl = ownerPill.querySelector<HTMLElement>('.aic-owner-label');
+
+      ownerPill.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const isOpen = ownerPill.dataset.open === 'true';
+        document.querySelectorAll<HTMLElement>('[data-owner-pill][data-open="true"]').forEach((p) => { p.dataset.open = 'false'; });
+        ownerPill.dataset.open = isOpen ? 'false' : 'true';
+      });
+
+      ownerPill.querySelectorAll<HTMLElement>('.aic-owner-option').forEach((opt) => {
+        opt.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const val = opt.dataset.optionValue ?? '';
+          draftActionItems[index].ownerName = val || null;
+          if (hiddenInput) hiddenInput.value = val;
+          ownerPill.querySelectorAll('.aic-owner-option').forEach((o) => o.classList.remove('selected'));
+          opt.classList.add('selected');
+          if (val) {
+            ownerPill.classList.add('has-owner');
+            const color = opt.dataset.optionColor ?? '#007AFF';
+            if (avatarEl) { avatarEl.textContent = val.charAt(0); avatarEl.style.background = color; }
+            if (labelEl) labelEl.textContent = val;
+          } else {
+            ownerPill.classList.remove('has-owner');
+            if (avatarEl) { avatarEl.textContent = '?'; avatarEl.style.background = '#86868B'; }
+            if (labelEl) labelEl.textContent = '未指派';
+          }
+          ownerPill.dataset.open = 'false';
+        });
+      });
+    }
+
+    card.querySelectorAll<HTMLButtonElement>('[data-prio-value]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const prioValue = btn.dataset.prioValue as TaskPriorityValue;
+        draftActionItems[index].priority = prioValue;
+        card.querySelectorAll<HTMLButtonElement>('[data-prio-value]').forEach((b) => b.classList.remove('aic-prio-active'));
+        btn.classList.add('aic-prio-active');
+        const hiddenInput = card.querySelector<HTMLInputElement>('[data-field="priority"]');
+        if (hiddenInput) hiddenInput.value = prioValue;
       });
     });
   });
@@ -530,19 +671,7 @@ function renderImportPreview(): void {
   }
 
   safeImportPreview.className = 'import-preview';
-  const summaryCard = `
-    <article class="import-item-card" style="border:1px solid var(--border-light); background:var(--bg-body);">
-      <div class="import-item-header">
-        <div>
-          <p class="import-item-index">会议摘要</p>
-          <h3>AI 解析摘要</h3>
-        </div>
-        ${currentParsedIntakeId ? `<span class="priority-tag priority-medium">${escapeHtml(currentParsedIntakeId)}</span>` : ''}
-      </div>
-      <p style="color:var(--text-muted); margin:0; line-height:1.6;">${escapeHtml(draftSummary || '暂无描述')}</p>
-    </article>
-  `;
-  safeImportPreview.innerHTML = summaryCard + draftActionItems.map(createImportCard).join('');
+  safeImportPreview.innerHTML = createPreviewSummaryCard() + draftActionItems.map(createStyledImportCard).join('');
   bindImportPreviewEvents();
 }
 
@@ -557,12 +686,13 @@ function renderIntakeHistory(): void {
   safeIntakeHistory.innerHTML = latestIntakes
     .slice(0, 8)
     .map((intake) => `
-      <div class="feed-item" data-intake-id="${escapeHtml(intake.id)}" style="cursor:pointer;">
-        <div class="feed-icon">${intake.status === 'imported' ? '?' : 'AI'}</div>
+      <div class="feed-item" data-intake-id="${escapeHtml(intake.id)}" style="cursor:pointer; padding-right:32px;">
+        <div class="feed-icon">${intake.status === 'imported' ? '✓' : 'AI'}</div>
         <div class="feed-content">
           <p>${escapeHtml(intake.summary ?? intake.sourceContent.slice(0, 48))}</p>
           <span>${escapeHtml(formatDateTime(intake.parsedAt ?? intake.createdAt))} · ${escapeHtml(intake.parserEngine)}</span>
         </div>
+        <button class="intake-delete-btn" data-delete-intake-id="${escapeHtml(intake.id)}" title="删除此记录">×</button>
       </div>
     `)
     .join('');
@@ -580,9 +710,35 @@ function renderIntakeHistory(): void {
       safeParserModeInput.value = intake.parserMode;
       draftActionItems = intake.actionItems.map(normalizeActionItem);
       draftSummary = intake.summary ?? '';
+      draftParserEngine = intake.parserEngine;
       currentParsedIntakeId = intake.id;
       renderImportPreview();
+      updateEngineLabelElement(draftParserEngine);
       setImportFeedback(`已加载解析记录 ${intake.id}。`, 'success');
+    });
+  });
+
+  safeIntakeHistory.querySelectorAll<HTMLButtonElement>('[data-delete-intake-id]').forEach((btn) => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const id = btn.dataset.deleteIntakeId;
+      if (!id) return;
+      try {
+        await fetchJson<{ deleted: true; id: string }>(`/api/meeting-intakes/${id}`, { method: 'DELETE' });
+        latestIntakes = latestIntakes.filter((entry) => entry.id !== id);
+        renderIntakeHistory();
+        if (currentParsedIntakeId === id) {
+          currentParsedIntakeId = null;
+          draftActionItems = [];
+          draftSummary = '';
+          draftParserEngine = '';
+          renderImportPreview();
+        }
+        setImportFeedback('解析记录已删除。', 'success');
+      } catch (error) {
+        const message = error instanceof Error ? error.message : '删除失败';
+        setImportFeedback(`删除失败：${message}`, 'error');
+      }
     });
   });
 }
@@ -605,16 +761,23 @@ async function previewImportPayload(): Promise<void> {
   if (!rawText) {
     draftActionItems = [];
     draftSummary = '';
+    draftParserEngine = '';
     currentParsedIntakeId = null;
     renderImportPreview();
     setImportFeedback('请先输入会议纪要文本或上传文本文件。', 'error');
     return;
   }
 
+  safePreviewImportButton.disabled = true;
+  safePreviewImportButton.classList.add('btn-loading');
+  safePreviewImportButton.textContent = '解析中...';
+  setImportFeedback('正在调用模型解析，请稍候...', 'neutral');
+
   try {
     if (isLikelyJsonPayload(rawText)) {
       draftActionItems = parseImportPayload(rawText);
       draftSummary = '当前预览来自手工 JSON 输入。';
+      draftParserEngine = '';
       currentParsedIntakeId = null;
     } else {
       const response = await fetchJson<ParseMeetingResponse>('/api/meeting-intakes/parse', {
@@ -624,7 +787,7 @@ async function previewImportPayload(): Promise<void> {
         },
         body: JSON.stringify({
           meetingId: safeMeetingIdInput.value.trim() || null,
-          operatorName: safeOperatorNameInput.value.trim() || '????',
+          operatorName: safeOperatorNameInput.value.trim() || '系统',
           parserMode: safeParserModeInput.value,
           sourceType: safeSourceFileInput.files?.[0] ? 'file' : 'text',
           sourceName: safeSourceFileInput.files?.[0]?.name ?? null,
@@ -634,19 +797,25 @@ async function previewImportPayload(): Promise<void> {
 
       draftActionItems = response.payload.actionItems.map(normalizeActionItem);
       draftSummary = response.payload.summary;
+      draftParserEngine = response.intake.parserEngine;
       currentParsedIntakeId = response.intake.id;
       await loadIntakes();
     }
 
     renderImportPreview();
-    setImportFeedback(`已解析 ${draftActionItems.length} 条行动项，请确认后导入。`, 'success');
+    updateEngineLabelElement(draftParserEngine);
   } catch (error) {
     draftActionItems = [];
     draftSummary = '';
+    draftParserEngine = '';
     currentParsedIntakeId = null;
     renderImportPreview();
-    const message = error instanceof Error ? error.message : '????';
-    setImportFeedback(`?????${message}`, 'error');
+    const message = error instanceof Error ? error.message : '未知错误';
+    setImportFeedback(`解析失败：${message}`, 'error');
+  } finally {
+    safePreviewImportButton.disabled = false;
+    safePreviewImportButton.classList.remove('btn-loading');
+    safePreviewImportButton.textContent = '一键解析';
   }
 }
 
@@ -723,7 +892,17 @@ function getCurrentUserName(): string {
 function renderDashboardTodos(): void {
   const allTasks = latestBoardData ? latestBoardData.columns.flatMap((c) => c.items) : [];
   const userName = getCurrentUserName();
-  const myTodos = allTasks.filter((t) => t.ownerName === userName && t.status !== 'done');
+  const myTodos = allTasks.filter((t) => {
+    if (t.status === 'done') {
+      return false;
+    }
+
+    if (currentUserMemberId) {
+      return t.ownerMemberId === currentUserMemberId;
+    }
+
+    return t.ownerName === userName;
+  });
 
   if (myTodos.length === 0) {
     safeDashboardTodoList.innerHTML = '<div class="empty-state" style="padding: 24px;">太棒了！当前没有任何待办任务。</div>';
@@ -790,6 +969,10 @@ async function openDashboardTaskDetail(taskId: string): Promise<void> {
         ${createStatusActions(task)}
       </div>
       <div>
+        <div class="d-label">操作</div>
+        <button class="apple-secondary-btn small-btn" data-delete-task-id="${task.id}" style="color:var(--danger);">删除任务</button>
+      </div>
+      <div>
         <div class="d-label" style="display:flex; gap:4px; align-items:center;">
            规定截止 <span style="font-size:11px; opacity:0.6; font-weight:normal;">(滚轮调整)</span>
         </div>
@@ -826,6 +1009,13 @@ async function openDashboardTaskDetail(taskId: string): Promise<void> {
     });
   });
 
+  safeDashboardDetailContentBody.querySelectorAll<HTMLButtonElement>('[data-delete-task-id]').forEach((button) => {
+    button.addEventListener('click', async (event) => {
+      event.stopPropagation();
+      await deleteTask(task.id);
+    });
+  });
+
   setupEditableTaskFields(safeDashboardDetailContentBody, task);
 }
 
@@ -834,9 +1024,13 @@ function setMemberFeedback(message: string, tone: 'neutral' | 'success' | 'error
   safeMemberFeedback.textContent = message;
 }
 
-function setMeetingFeedback(message: string, tone: 'neutral' | 'success' | 'error' = 'neutral'): void {
+function setMeetingFeedback(message: string, tone: 'neutral' | 'success' | 'error' = 'neutral', showLaunchBtn = false): void {
   safeMeetingFeedback.className = `import-feedback tone-${tone}`;
-  safeMeetingFeedback.textContent = message;
+  if (showLaunchBtn) {
+    safeMeetingFeedback.innerHTML = `<span>${escapeHtml(message)}</span><button class="launch-wemeet-btn" onclick="window.open('wemeet://','_blank')">🎥 拉起腾讯会议</button>`;
+  } else {
+    safeMeetingFeedback.textContent = message;
+  }
 }
 
 function degreeTypeLabel(value: Member['degreeType']): string {
@@ -992,71 +1186,57 @@ function createMemberCard(member: Member): string {
 }
 
 function createMeetingCard(meeting: Meeting): string {
-  const selectedIds = new Set(meeting.participants.map((participant) => participant.id));
+  const selectedIds = new Set(meeting.participants.map((p) => p.id));
+  const timeLabel = meeting.meetingTime
+    ? new Date(meeting.meetingTime).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false })
+    : '未设置';
+
+  const participantAvatars = meeting.participants.slice(0, 6).map((p) => {
+    const color = avatarColorByMemberId(p.id);
+    return `<div class="mc-avatar" style="background:${color};" title="${escapeHtml(p.name)}">${escapeHtml(p.name.charAt(0))}</div>`;
+  }).join('');
+  const extraCount = meeting.participants.length - 6;
 
   return `
-    <article class="resource-item">
-      <div class="resource-item-header">
-        <div>
-          <p class="resource-item-index">会议 ID：${escapeHtml(meeting.id)}</p>
-          <h3>${escapeHtml(meeting.topic)}</h3>
+    <article class="meeting-card" data-meeting-id="${escapeHtml(meeting.id)}">
+      <div class="mc-header">
+        <div class="mc-main">
+          <h3 class="mc-topic">${escapeHtml(meeting.topic)}</h3>
+          <div class="mc-chips">
+            <span class="mc-chip">🕐 ${escapeHtml(timeLabel)}</span>
+            ${meeting.location ? `<span class="mc-chip">📍 ${escapeHtml(meeting.location)}</span>` : ''}
+          </div>
         </div>
-        <div class="resource-actions">
-          <button class="danger-button" data-delete-meeting-id="${meeting.id}">删除会议</button>
-        </div>
-      </div>
-      <div class="resource-meta">
-        <div>
-          <span>会议时间</span>
-          <strong>${escapeHtml(meeting.meetingTime)}</strong>
-        </div>
-        <div>
-          <span>会议地点</span>
-          <strong>${escapeHtml(meeting.location ?? '未设置')}</strong>
+        <div class="mc-actions">
+          <button class="launch-wemeet-btn" onclick="window.open('wemeet://','_blank')">🎥 腾讯会议</button>
+          <button class="mc-delete-btn" data-delete-meeting-id="${escapeHtml(meeting.id)}" title="删除会议">🗑</button>
         </div>
       </div>
-      <div class="participant-tag-list">
+
+      <div class="mc-participants-row">
         ${meeting.participants.length > 0
-          ? meeting.participants
-              .map(
-                (participant) => `
-                  <div class="participant-tag">
-                    <strong>${escapeHtml(participant.name)}</strong>
-                    <span>${escapeHtml(participant.grade)} · ${degreeTypeLabel(participant.degreeType)}</span>
-                  </div>
-                `,
-              )
-              .join('')
-          : '<div class="empty-state">当前会议暂无参会人。</div>'}
+          ? `<div class="mc-avatar-stack">${participantAvatars}${extraCount > 0 ? `<div class="mc-avatar mc-avatar-more">+${extraCount}</div>` : ''}</div>
+             <span class="mc-participant-names">${meeting.participants.slice(0, 3).map((p) => escapeHtml(p.name)).join('、')}${meeting.participants.length > 3 ? ' 等' : ''}</span>`
+          : '<span class="mc-no-participants">暂无参会人</span>'}
       </div>
-      <div class="meeting-participants-panel">
-        <div class="meeting-participants-header">
-          <span>独立维护参会人</span>
-          <button class="secondary-button small-button" data-save-meeting-participants="${meeting.id}">保存参会人</button>
-        </div>
-        <div class="participant-checkbox-grid">
+
+      <details class="mc-edit-section">
+        <summary class="mc-edit-summary">编辑参会人</summary>
+        <div class="mc-checkbox-grid">
           ${latestMembers.length > 0
-            ? latestMembers
-                .map(
-                  (member) => `
-                    <label class="participant-option">
-                      <input
-                        type="checkbox"
-                        value="${member.id}"
-                        data-edit-meeting-participant="${meeting.id}"
-                        ${selectedIds.has(member.id) ? 'checked' : ''}
-                      />
-                      <div>
-                        <strong>${escapeHtml(member.name)}</strong>
-                        <span>${escapeHtml(member.grade)} · ${degreeTypeLabel(member.degreeType)}</span>
-                      </div>
-                    </label>
-                  `,
-                )
-                .join('')
-            : '<div class="empty-state">暂无成员可供选择。</div>'}
+            ? latestMembers.map((member) => `
+                <label class="mc-checkbox-item">
+                  <input type="checkbox" value="${escapeHtml(member.id)}" data-edit-meeting-participant="${escapeHtml(meeting.id)}" ${selectedIds.has(member.id) ? 'checked' : ''} />
+                  <div class="mc-checkbox-avatar" style="background:${avatarColorByMemberId(member.id)};">${escapeHtml(member.name.charAt(0))}</div>
+                  <div class="mc-checkbox-info">
+                    <strong>${escapeHtml(member.name)}</strong>
+                    <span>${escapeHtml(member.grade)} · ${degreeTypeLabel(member.degreeType)}</span>
+                  </div>
+                </label>`).join('')
+            : '<span class="mc-no-participants">暂无可选成员</span>'}
         </div>
-      </div>
+        <button class="apple-primary-btn small-btn mc-save-btn" data-save-meeting-participants="${escapeHtml(meeting.id)}" style="margin-top:10px;">保存参会人</button>
+      </details>
     </article>
   `;
 }
@@ -1321,7 +1501,7 @@ async function createMeeting(): Promise<void> {
     safeMeetingTimeInput.value = '';
     safeMeetingLocationInput.value = '';
     clearCreateMeetingMemberSelection();
-    setMeetingFeedback(`会议 ${topic} 已创建。`, 'success');
+    setMeetingFeedback('', 'neutral');
     await loadResources();
   } catch (error) {
     const message = error instanceof Error ? error.message : '创建会议失败';
@@ -1549,25 +1729,41 @@ async function updateTaskStatus(task: Task, status: TaskStatus): Promise<void> {
   await loadBoard(task.id);
 }
 
+async function deleteTask(taskId: string): Promise<void> {
+  await fetchJson<{ deleted: true; id: string }>(`/api/tasks/${taskId}`, {
+    method: 'DELETE',
+  });
+
+  if (selectedTaskId === taskId) {
+    selectedTaskId = null;
+  }
+
+  if (selectedDashboardTaskId === taskId) {
+    selectedDashboardTaskId = null;
+  }
+
+  await loadBoard();
+}
+
 function createTaskOwnerDropdownHTML(task: Task): string {
-  const currentOwner = task.ownerName;
-  const member = currentOwner ? latestMembers.find(m => m.name === currentOwner) : null;
+  const member = task.ownerMemberId ? latestMembers.find((m) => m.id === task.ownerMemberId) ?? null : null;
+  const currentOwner = member?.name ?? task.ownerName;
   const avatarTxt = currentOwner ? currentOwner.charAt(0) : '?';
   const avatarBg = member ? avatarColorByMemberId(member.id) : 'var(--text-muted)';
   const displayName = currentOwner || '待指派';
 
   let itemsHTML = `
-    <div class="dropdown-item ${!currentOwner ? 'active' : ''}" data-task-owner-val="">
+    <div class="dropdown-item ${!task.ownerMemberId ? 'active' : ''}" data-task-owner-id="">
       <div class="user-avatar" style="background:var(--text-muted); color:white; width:24px; height:24px; font-size:12px;">?</div>
       待指派
     </div>
   `;
 
-  [...latestMembers].sort((a,b) => a.name.localeCompare(b.name, 'zh-CN')).forEach((m) => {
-    const isActive = currentOwner === m.name ? 'active' : '';
+  [...latestMembers].sort((a, b) => a.name.localeCompare(b.name, 'zh-CN')).forEach((m) => {
+    const isActive = task.ownerMemberId === m.id ? 'active' : '';
     const color = avatarColorByMemberId(m.id);
     itemsHTML += `
-      <div class="dropdown-item ${isActive}" data-task-owner-val="${escapeHtml(m.name)}">
+      <div class="dropdown-item ${isActive}" data-task-owner-id="${escapeHtml(m.id)}">
          <div class="user-avatar" style="background:${color}; color:white; width:24px; height:24px; font-size:12px;">
            ${escapeHtml(m.name.charAt(0))}
          </div>
@@ -1648,12 +1844,12 @@ function setupEditableTaskFields(container: HTMLElement, task: Task): void {
     dropdownItems.forEach((item) => {
       item.addEventListener('click', async (e) => {
         e.stopPropagation();
-        const value = item.dataset.taskOwnerVal || null;
+        const value = item.dataset.taskOwnerId || null;
         
         await fetchJson<Task>(`/api/tasks/${task.id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ownerName: value }),
+          body: JSON.stringify({ ownerMemberId: value }),
         });
         
         const dropdownMenu = taskOwnerContainer.querySelector('.user-dropdown');
@@ -1747,6 +1943,10 @@ async function renderTaskDetail(task: Task): Promise<void> {
           ${createStatusActions(taskDetailData)}
         </div>
         <div>
+          <div class="d-label">操作</div>
+          <button class="apple-secondary-btn small-btn" data-delete-task-id="${taskDetailData.id}" style="color:var(--danger);">删除任务</button>
+        </div>
+        <div>
           <div class="d-label" style="display:flex; gap:4px; align-items:center;">
              规定截止 <span style="font-size:11px; opacity:0.6; font-weight:normal;">(滚轮调整)</span>
           </div>
@@ -1779,6 +1979,17 @@ async function renderTaskDetail(task: Task): Promise<void> {
       const nextStatus = button.dataset.nextStatus as TaskStatus;
       if (!nextStatus || taskDetailData.status === nextStatus) return;
       await updateTaskStatus(taskDetailData, nextStatus);
+    });
+  });
+
+  safeTaskDetail.querySelectorAll<HTMLButtonElement>('[data-delete-task-id]').forEach((button) => {
+    button.addEventListener('click', async (event) => {
+      event.stopPropagation();
+      await deleteTask(taskDetailData.id);
+      const safeTaskDrawer = document.getElementById('task-drawer');
+      if (safeTaskDrawer) {
+        safeTaskDrawer.classList.remove('open');
+      }
     });
   });
 
@@ -1912,3 +2123,7 @@ loadSamplePayload();
 void loadBoard();
 void loadResources();
 void loadIntakes();
+
+document.addEventListener('click', () => {
+  document.querySelectorAll<HTMLElement>('[data-owner-pill][data-open="true"]').forEach((p) => { p.dataset.open = 'false'; });
+});

@@ -1,3 +1,5 @@
+import Anthropic from '@anthropic-ai/sdk';
+
 import type {
   ActionItem,
   ActionItemsPayload,
@@ -342,6 +344,105 @@ function heuristicParse(content: string, members: string[]): ActionItemsPayload 
   };
 }
 
+const CLAUDE_SYSTEM_PROMPT = `你是一个专业的科研团队会议行动项提取助手。
+
+从会议纪要中识别每一条行动项，提取以下字段：
+- title: 简短任务标题（不超过40字），去掉"请"/"需要"等前缀
+- description: 完整描述，保留上下文
+- ownerName: 负责人姓名（中文姓名2-4字或英文名），无法识别则为 null
+- dueDate: 截止日期（ISO 8601格式 YYYY-MM-DD），无法识别则为 null（今天/明天/下周等相对日期请换算为绝对日期）
+- priority: "high"（紧急/今天/明天）| "medium"（下周/本月）| "low"（未指明）
+- status: 始终为 "todo"
+- acceptanceCriteria: 验收标准，如有产出物则填写，否则为 null
+- sourceText: 原文片段（最多200字）
+- sourceTimestamp: 时间戳，会议纪要无时间戳时为 null
+- confidence: 0-1置信度（能识别owner+dueDate为0.85，仅有其一为0.75，两者都没有为0.60）
+- tags: 相关标签数组，从["实验","模型","数据","文档","开发","会议"]中选，无则为["会议行动项"]
+- id: 唯一字符串，格式为 "ai_<timestamp>_<三位序号>"
+
+同时生成 summary：会议核心内容摘要（50-150字）。
+
+严格按照工具参数 JSON schema 输出，不输出额外文字。`;
+
+async function tryParseWithClaude(content: string): Promise<LlmParsedPayload | null> {
+  const apiKey = process.env.ANTHROPIC_API_KEY ?? process.env.ANTHROPIC_AUTH_TOKEN;
+  if (!apiKey) return null;
+
+  const model = process.env.ANTHROPIC_MODEL ?? 'claude-sonnet-4-6';
+  const client = new Anthropic({ apiKey });
+  const today = new Date().toISOString().slice(0, 10);
+
+  const toolInputSchema = {
+    type: 'object' as const,
+    required: ['summary', 'actionItems'],
+    properties: {
+      summary: { type: 'string', minLength: 1 },
+      actionItems: {
+        type: 'array',
+        items: {
+          type: 'object',
+          required: ['id', 'title', 'description', 'priority', 'status', 'sourceText', 'confidence', 'tags'],
+          properties: {
+            id: { type: 'string' },
+            title: { type: 'string', maxLength: 120 },
+            description: { type: 'string', maxLength: 1000 },
+            ownerName: { type: ['string', 'null'] },
+            dueDate: { type: ['string', 'null'] },
+            priority: { type: 'string', enum: ['high', 'medium', 'low'] },
+            status: { type: 'string', enum: ['todo', 'in_progress', 'done', 'blocked'] },
+            acceptanceCriteria: { type: ['string', 'null'] },
+            sourceText: { type: 'string', maxLength: 1000 },
+            sourceTimestamp: { type: ['string', 'null'] },
+            confidence: { type: 'number', minimum: 0, maximum: 1 },
+            tags: { type: 'array', items: { type: 'string' } },
+          },
+          additionalProperties: false,
+        },
+      },
+    },
+    additionalProperties: false,
+  };
+
+  const response = await client.messages.create({
+    model,
+    max_tokens: 4096,
+    system: [
+      {
+        type: 'text',
+        text: CLAUDE_SYSTEM_PROMPT,
+        cache_control: { type: 'ephemeral' },
+      },
+    ],
+    tools: [
+      {
+        name: 'extract_action_items',
+        description: '将会议纪要解析为结构化行动项列表',
+        input_schema: toolInputSchema,
+      },
+    ],
+    tool_choice: { type: 'tool', name: 'extract_action_items' },
+    messages: [
+      {
+        role: 'user',
+        content: `今天是 ${today}。\n\n会议纪要：\n${content}`,
+      },
+    ],
+  });
+
+  const toolUse = response.content.find(
+    (block): block is Anthropic.ToolUseBlock => block.type === 'tool_use',
+  );
+
+  if (!toolUse) {
+    throw new Error('Claude returned no tool use block.');
+  }
+
+  return {
+    payload: toolUse.input as ActionItemsPayload,
+    engine: `claude:${model}`,
+  };
+}
+
 async function tryParseWithOpenAI(content: string): Promise<LlmParsedPayload | null> {
   const apiKey = process.env.OPENAI_API_KEY;
   const model = process.env.OPENAI_MODEL;
@@ -504,12 +605,18 @@ export class IntakeService {
 
     try {
       if (parserMode !== 'heuristic') {
-        const llmPayload = await tryParseWithOpenAI(normalizedContent);
-        if (llmPayload) {
-          payload = sanitizePayload(llmPayload.payload);
-          parserEngine = llmPayload.engine;
+        const claudePayload = await tryParseWithClaude(normalizedContent);
+        if (claudePayload) {
+          payload = sanitizePayload(claudePayload.payload);
+          parserEngine = claudePayload.engine;
         } else {
-          payload = heuristicParse(normalizedContent, members);
+          const openAiPayload = await tryParseWithOpenAI(normalizedContent);
+          if (openAiPayload) {
+            payload = sanitizePayload(openAiPayload.payload);
+            parserEngine = openAiPayload.engine;
+          } else {
+            payload = heuristicParse(normalizedContent, members);
+          }
         }
       } else {
         payload = heuristicParse(normalizedContent, members);
@@ -594,6 +701,17 @@ export class IntakeService {
       intake: await this.getIntakeById(id),
       items: tasks,
       count: tasks.length,
+    };
+  }
+
+  async deleteIntake(id: string): Promise<{ deleted: true; id: string }> {
+    const intake = await this.getIntakeById(id);
+
+    await this.db.run('DELETE FROM meeting_intakes WHERE id = ?', [intake.id]);
+
+    return {
+      deleted: true,
+      id: intake.id,
     };
   }
 }

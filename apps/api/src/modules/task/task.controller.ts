@@ -24,6 +24,7 @@ export class TaskController {
     const query: ListTasksQuery = {
       status: request.query.status as ListTasksQuery['status'],
       ownerName: request.query.ownerName,
+      ownerMemberId: request.query.ownerMemberId,
       meetingId: request.query.meetingId,
     };
 
@@ -53,6 +54,14 @@ export class TaskController {
   ): Promise<void> => {
     const task = await this.taskService.updateTask(request.params.id, request.body);
     response.status(200).json(task);
+  };
+
+  deleteTask = async (
+    request: RequestLike,
+    response: ResponseLike,
+  ): Promise<void> => {
+    const result = await this.taskService.deleteTask(request.params.id);
+    response.status(200).json(result);
   };
 
   getBoard = async (

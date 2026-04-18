@@ -41,6 +41,15 @@ export function createTaskRoutes(taskController: TaskController): RouteDefinitio
       },
     },
     {
+      method: 'DELETE',
+      pattern: /^\/api\/tasks\/([^/]+)$/,
+      handler: taskController.deleteTask,
+      getParams: (pathname) => {
+        const match = pathname.match(/^\/api\/tasks\/([^/]+)$/);
+        return { id: match?.[1] ?? '' };
+      },
+    },
+    {
       method: 'GET',
       pattern: /^\/api\/board\/stats$/,
       handler: taskController.getBoardStats,

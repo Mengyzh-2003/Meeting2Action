@@ -175,6 +175,15 @@ export class MemberService {
       ],
     );
 
+    await this.db.run(
+      `
+        UPDATE tasks
+        SET owner_name = ?
+        WHERE owner_member_id = ?
+      `,
+      [updatedMember.name, memberId],
+    );
+
     return updatedMember;
   }
 
@@ -186,6 +195,7 @@ export class MemberService {
     }
 
     await this.db.run('DELETE FROM meeting_participants WHERE member_id = ?', [memberId]);
+    await this.db.run('UPDATE tasks SET owner_member_id = NULL WHERE owner_member_id = ?', [memberId]);
     await this.db.run('DELETE FROM members WHERE id = ?', [memberId]);
 
     return {

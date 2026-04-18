@@ -10,6 +10,7 @@ export interface Task {
   id: string;
   sourceActionItemId: string;
   meetingId: string | null;
+  ownerMemberId: string | null;
   title: string;
   description: string;
   ownerName: string | null;
@@ -42,6 +43,7 @@ export interface ImportActionItemsInput {
     id: string;
     title: string;
     description: string;
+    ownerMemberId?: string | null;
     ownerName: string | null;
     dueDate: string | null;
     priority: TaskPriority;
@@ -57,12 +59,14 @@ export interface ImportActionItemsInput {
 export interface ListTasksQuery {
   status?: TaskStatus;
   ownerName?: string;
+  ownerMemberId?: string;
   meetingId?: string;
 }
 
 export interface UpdateTaskInput {
   title?: string;
   description?: string;
+  ownerMemberId?: string | null;
   ownerName?: string | null;
   dueDate?: string | null;
   priority?: TaskPriority;

@@ -2,6 +2,7 @@ CREATE TABLE IF NOT EXISTS tasks (
   id TEXT NOT NULL PRIMARY KEY,
   source_action_item_id TEXT NOT NULL,
   meeting_id TEXT,
+  owner_member_id TEXT,
   title TEXT NOT NULL CHECK (length(title) <= 120),
   description TEXT NOT NULL,
   owner_name TEXT CHECK (owner_name IS NULL OR length(owner_name) <= 50),
@@ -19,6 +20,7 @@ CREATE TABLE IF NOT EXISTS tasks (
 
 CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks (status);
 CREATE INDEX IF NOT EXISTS idx_tasks_owner_name ON tasks (owner_name);
+CREATE INDEX IF NOT EXISTS idx_tasks_owner_member_id ON tasks (owner_member_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_due_date ON tasks (due_date);
 CREATE INDEX IF NOT EXISTS idx_tasks_meeting_id ON tasks (meeting_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_source_action_item_id ON tasks (source_action_item_id);

@@ -10,7 +10,10 @@ function getDatabasePath(): string {
 
 function loadSchemaSql(): string {
   const baseSchemaPath = resolve(process.cwd(), 'docs', 'api', 'tasks-table.sql');
-  const baseSchema = readFileSync(baseSchemaPath, 'utf8');
+  const baseSchema = readFileSync(baseSchemaPath, 'utf8').replace(
+    "CREATE INDEX IF NOT EXISTS idx_tasks_owner_member_id ON tasks (owner_member_id);\n",
+    '',
+  );
 
   const intakeSchema = `
 CREATE TABLE IF NOT EXISTS meeting_intakes (
@@ -59,6 +62,30 @@ export class SqliteDatabaseClient implements DatabaseClient {
     this.database = new DatabaseSync(databasePath);
     this.database.exec('PRAGMA foreign_keys = ON;');
     this.database.exec(loadSchemaSql());
+    this.migrateTaskOwnerMember();
+  }
+
+  private migrateTaskOwnerMember(): void {
+    const columns = this.database.prepare('PRAGMA table_info(tasks)').all() as Array<{ name: string }>;
+    const hasOwnerMemberId = columns.some((column) => column.name === 'owner_member_id');
+
+    if (!hasOwnerMemberId) {
+      this.database.exec('ALTER TABLE tasks ADD COLUMN owner_member_id TEXT;');
+    }
+
+    this.database.exec('CREATE INDEX IF NOT EXISTS idx_tasks_owner_member_id ON tasks (owner_member_id);');
+
+    this.database.exec(`
+      UPDATE tasks
+      SET owner_member_id = (
+        SELECT id
+        FROM members
+        WHERE members.name = tasks.owner_name
+        LIMIT 1
+      )
+      WHERE owner_name IS NOT NULL
+        AND (owner_member_id IS NULL OR owner_member_id = '')
+    `);
   }
 
   async all<T>(sql: string, params: DatabaseParameter[] = []): Promise<T[]> {

@@ -136,7 +136,7 @@
           <div class="panel-header">
             <div>
               <h3 style="font-size:16px;">载入通讯流与解析</h3>
-              <p style="font-size:12px; color:var(--text-muted); margin-top:2px;">识别引擎：会易达专属学术大模型 v2</p>
+              <p style="font-size:12px; color:var(--text-muted); margin-top:2px;" id="engine-label-text">识别引擎：会易达专属学术大模型 v2</p>
             </div>
             <div style="display:flex;gap:8px;">
               <button id="load-sample" class="apple-secondary-btn small-btn">示例</button>
@@ -185,8 +185,8 @@
             </div>
             <div id="intake-history" class="activity-feed empty-state">暂无解析记录</div>
           </div>
-          <div class="review-panel" style="flex-grow:1;">
-            <div id="import-preview" class="import-preview empty-state" style="background:var(--bg-card);border-radius:var(--radius-lg);padding:20px;height:100%;">
+          <div class="review-panel" style="flex-grow:1; background:var(--bg-card); border-radius:var(--radius-lg); padding:20px;">
+            <div id="import-preview" class="import-preview empty-state">
               <div class="placeholder-text" style="color:var(--text-muted);text-align:center;padding-top:40px;">点击左侧「一键解析」进行体验。</div>
             </div>
           </div>
@@ -273,17 +273,17 @@
                <button id="refresh-meetings" class="apple-secondary-btn small-btn">同步</button>
             </div>
             <div style="display:flex;gap:8px;margin-bottom:12px;">
-              <input id="meeting-topic-input" class="apple-input" type="text" placeholder="主题" />
-              <input id="meeting-time-input" class="apple-input" type="text" placeholder="时间" />
-              <input id="meeting-location-input" class="apple-input" type="text" placeholder="地点" />
+              <input id="meeting-topic-input" class="apple-input" type="text" placeholder="主题" style="flex:2;" />
+              <input id="meeting-time-input" class="apple-input" type="datetime-local" style="flex:2;" />
+              <input id="meeting-location-input" class="apple-input" type="text" placeholder="地点（选填）" style="flex:2;" />
             </div>
             <div class="participant-picker-block" style="background:var(--bg-body); border-radius:12px; padding:12px; margin-bottom:12px;">
               <div style="display:flex;justify-content:space-between;margin-bottom:8px;"><span style="font-size:12px;font-weight:600;">参会人</span><button id="clear-meeting-members" class="apple-secondary-btn small-btn" style="padding:2px 8px;font-size:11px;">清空</button></div>
               <div id="meeting-member-picker" class="participant-picker empty-state" style="font-size:12px;color:var(--text-muted);">尚未加载...</div>
             </div>
             <button id="create-meeting" class="apple-primary-btn" style="width:100%;">创建会议</button>
-            <div id="meeting-feedback" class="mt-10" style="font-size:13px; color:var(--danger)"></div>
-            <div id="meeting-list" class="activity-feed mt-20 empty-state" style="margin-top:20px;">加载中...</div>
+            <div id="meeting-feedback" class="import-feedback mt-10"></div>
+            <div id="meeting-list" class="meeting-list mt-20 empty-state">加载中...</div>
          </article>
          <article class="card-base">
             <div class="dash-section-title">
