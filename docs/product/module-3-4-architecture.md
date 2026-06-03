@@ -1,179 +1,214 @@
-# 模块 3-4 前后端与数据库框架图（当前实现版）
+# 模块 3-4 前后端与数据库框架图（当前代码版）
 
-本文档聚焦 A 组当前负责的两部分能力：
+本文档聚焦 A 组负责的两部分：
 
 - 模块 3：自动化任务分发系统
 - 模块 4：极简可视化看板
 
-这里默认模块 2 已经输出统一的数据结构 `actionItems`，模块 3 和模块 4 围绕这份结构化数据继续完成任务生成、落库、展示和流转。
+与旧版草图不同，本文档只描述当前仓库里已经落地的真实结构，不再使用假设中的 `Assignment Service`、`Board Controller` 等未实现组件。
 
-## 1. 总体职责划分
+## 1. 当前职责边界
 
-### 前端 Web（已实现）
+### 模块 3：自动化任务分发系统
 
-- 导入确认页：确认结构化行动项后导入
-- 看板页：按状态展示任务并支持筛选
-- 任务详情页：支持负责人切换、状态流转、截止时间滚轮编辑
-- 统计面板：展示总任务数、状态分布、风险分布
+当前已实现内容：
 
-### 后端 API（已实现）
+- 接收模块 2 输出的 `actionItems`
+- 支持在前端解析页确认后导入任务
+- 支持直接手动创建任务
+- 支持将任务写入 SQLite，并记录任务活动日志
+- 支持负责人、截止时间、优先级、状态更新
 
-- 接收 `actionItems`
-- 将 `actionItems` 转换为内部 `tasks`
-- 提供任务、成员、会议相关接口
-- 提供看板聚合与统计接口
-- 提供任务活动记录接口
-- 为后续提醒、周报等能力预留扩展点
+当前实际代码落点：
 
-### 数据库（已实现）
+- 前端：`apps/web/index.html`、`apps/web/src/main.ts`
+- 后端：`apps/api/src/modules/task`
+- 与解析链路衔接：`apps/api/src/modules/intake`
 
-- 持久化会议、任务、成员、任务操作记录
-- 支撑看板查询、状态流转和统计分析
+### 模块 4：极简可视化看板
 
-## 2. 前后端总体框架图
+当前已实现内容：
+
+- 三栏看板 To Do / Doing / Done
+- 看板统计接口与统计展示
+- 风险、负责人、状态过滤
+- 任务详情抽屉与工作台编辑
+- Dashboard 概览卡片和近期任务入口
+
+当前实际代码落点：
+
+- 前端：`apps/web/index.html`、`apps/web/src/main.ts`、`apps/web/src/styles.css`
+- 后端：同一套 `TaskController + TaskService` 对外提供任务与看板数据
+
+## 2. 总体框架图
 
 ```mermaid
 flowchart LR
-    A[模块2 AI解析结果\nactionItems JSON] --> B[前端导入确认页\nImport Review]
-    B --> C[后端任务导入接口\nPOST /api/tasks/import-from-action-items]
-    C --> D[任务分发服务\nAssignment Service]
-    D --> E[(SQLite)]
+    A[登录页 Auth Gate] --> B[POST /api/auth/login]
+    B --> C[(user_sessions)]
+    C --> D[进入 Dashboard / Workspace / Intake / Hub]
 
-    E --> F[任务查询接口\nGET /api/tasks]
-    E --> G[看板聚合接口\nGET /api/board]
-    E --> H[统计接口\nGET /api/board/stats]
+    E[模块2 输出 actionItems] --> F[前端解析确认页]
+    F --> G[POST /api/tasks/import-from-action-items]
+    G --> H[TaskService]
+    H --> I[(tasks)]
 
-    F --> I[前端任务列表 / 看板页]
-    G --> I
-    H --> J[前端统计面板 / 周报摘要]
+    J[手动创建任务] --> K[POST /api/tasks]
+    K --> H
 
-    I --> K[任务详情弹窗]
-    I --> L[状态流转操作\nPATCH /api/tasks/:id]
-    L --> E
+    I --> L[GET /api/tasks]
+    I --> M[GET /api/board]
+    I --> N[GET /api/board/stats]
+    L --> O[工作台任务列表]
+    M --> P[三栏看板]
+    N --> Q[Dashboard 统计区]
 
-    E --> M[Worker 定时任务\n逾期检查 / 周报生成]
-    M --> N[提醒中心 / 站内消息]
+    R[(members)] --> S[GET /api/members]
+    T[(meetings)] --> U[GET /api/meetings]
+    S --> O
+    U --> O
 ```
 
-## 3. 模块分层图
+## 3. 当前分层结构
 
 ```mermaid
 flowchart TD
     subgraph Frontend[前端 apps/web]
-        A1[导入确认页]
-        A2[任务看板页]
-        A3[任务详情抽屉]
-        A4[统计面板]
-        A5[任务服务层 taskService]
+        A1[登录页 / 首位成员初始化]
+        A2[智能解析舱]
+        A3[研发工作台 / 三栏看板]
+        A4[Dashboard 概览页]
+        A5[资源中心：成员与会议]
     end
 
     subgraph Backend[后端 apps/api]
-        B1[Task Controller]
-        B2[Board Controller]
-        B3[Assignment Service]
-        B4[Task Service]
-        B5[Board Service]
-        B6[Shared Schema Validator]
+        B1[AuthController / AuthService]
+        B2[TaskController / TaskService]
+        B3[IntakeController / IntakeService]
+        B4[MemberController / MemberService]
+        B5[MeetingController / MeetingService]
     end
 
-    subgraph DB[数据库]
-        C1[(meetings)]
-        C2[(tasks)]
-        C3[(members)]
+    subgraph DB[SQLite]
+        C1[(members)]
+        C2[(user_sessions)]
+        C3[(tasks)]
         C4[(task_activity_logs)]
+        C5[(meetings)]
+        C6[(meeting_participants)]
+        C7[(meeting_intakes)]
     end
 
-    subgraph Worker[异步任务 apps/worker]
-        D1[逾期扫描 Job]
-        D2[周报生成 Job]
-        D3[提醒发送 Handler]
-    end
+    A1 --> B1
+    A2 --> B3
+    A3 --> B2
+    A4 --> B2
+    A5 --> B4
+    A5 --> B5
 
-    A1 --> A5
-    A2 --> A5
-    A3 --> A5
-    A4 --> A5
-
-    A5 --> B1
-    A5 --> B2
-
-    B1 --> B6
-    B1 --> B3
-    B1 --> B4
-    B2 --> B5
-
-    B3 --> C2
-    B4 --> C2
-    B4 --> C4
-    B5 --> C2
-    B5 --> C3
+    B1 --> C1
+    B1 --> C2
+    B2 --> C1
+    B2 --> C3
+    B2 --> C4
+    B2 --> C5
+    B3 --> C7
+    B3 --> C3
     B4 --> C1
-
-    D1 --> C2
-    D2 --> C2
-    D2 --> C4
-    D3 --> C3
+    B4 --> C6
+    B5 --> C5
+    B5 --> C6
 ```
 
-## 4. 数据流图
+## 4. 模块 3 当前数据流
 
 ```mermaid
 sequenceDiagram
-    participant AI as 模块2 AI解析
-    participant Web as 前端导入确认页
-    participant API as 后端导入接口
-    participant Service as Assignment Service
-    participant DB as 数据库
-    participant Board as 看板页
+    participant AI as 模块2 / 规则引擎
+    participant Web as 前端解析页
+    participant Intake as Intake API
+    participant Task as Task API
+    participant DB as SQLite
 
-    AI->>Web: 返回 actionItems JSON
-    Web->>Web: 用户确认负责人、截止时间、优先级
-    Web->>API: 提交 actionItems
-    API->>Service: 校验并转换为 tasks
-    Service->>DB: 写入 tasks
-    DB-->>API: 返回入库结果
-    API-->>Web: 返回任务列表
-    Web->>API: 请求看板数据
-    API->>DB: 查询任务与统计
-    DB-->>API: 返回聚合结果
-    API-->>Board: 返回 todo/doing/done 数据
+    AI->>Web: 返回 actionItems
+    Web->>Web: 用户确认负责人/优先级/截止时间
+    Web->>Task: POST /api/tasks/import-from-action-items
+    Task->>DB: 写入 tasks
+    Task->>DB: 写入 task_activity_logs
+    DB-->>Task: 返回任务
+    Task-->>Web: 返回 items / count
+
+    Web->>Task: POST /api/tasks
+    Task->>DB: 创建单条任务
+    DB-->>Task: 返回 task
+    Task-->>Web: 返回新任务
 ```
 
-## 5. 数据库实体关系图
+## 5. 模块 4 当前展示流
+
+```mermaid
+sequenceDiagram
+    participant Web as Dashboard / Workspace
+    participant API as TaskController
+    participant Service as TaskService
+    participant DB as SQLite
+
+    Web->>API: GET /api/tasks?keyword=&sortBy=&page=
+    API->>Service: listTasks(query)
+    Service->>DB: 查询 tasks
+    DB-->>Service: 返回分页结果
+    Service-->>API: ListTasksResult
+    API-->>Web: items / count / total / page / pageSize
+
+    Web->>API: GET /api/board
+    API->>Service: getBoard()
+    Service->>DB: 聚合 todo / doing / done
+    DB-->>API: BoardResponse
+    API-->>Web: 看板列数据
+
+    Web->>API: GET /api/board/stats
+    API-->>Web: total / todo / doing / done / overdue / dueSoon
+```
+
+## 6. 数据库实体关系图
 
 ```mermaid
 erDiagram
-    MEETINGS ||--o{ TASKS : generates
+    MEMBERS ||--o{ USER_SESSIONS : logs_in
     MEMBERS ||--o{ TASKS : owns
+    MEMBERS ||--o{ MEETING_PARTICIPANTS : attends
+    MEETINGS ||--o{ TASKS : generates
+    MEETINGS ||--o{ MEETING_PARTICIPANTS : has
     TASKS ||--o{ TASK_ACTIVITY_LOGS : records
-
-    MEETINGS {
-        string id PK
-        string topic
-        string meeting_time
-        string location
-        datetime created_at
-        datetime updated_at
-    }
 
     MEMBERS {
         string id PK
         string name
-        string grade
+        string student_id
+        string password
         string degree_type
         datetime created_at
         datetime updated_at
     }
 
+    USER_SESSIONS {
+        string token PK
+        string member_id FK
+        datetime created_at
+        datetime expires_at
+    }
+
     TASKS {
         string id PK
+        string source_action_item_id
         string meeting_id FK
+        string owner_member_id FK
         string owner_name
         string title
         text description
         string priority
         string status
-        date due_date
+        string due_date
         text acceptance_criteria
         text source_text
         decimal confidence
@@ -189,74 +224,69 @@ erDiagram
         string operator_name
         datetime created_at
     }
+
+    MEETINGS {
+        string id PK
+        string topic
+        string meeting_time
+        string location
+        datetime created_at
+        datetime updated_at
+    }
+
+    MEETING_PARTICIPANTS {
+        string meeting_id FK
+        string member_id FK
+        datetime created_at
+    }
 ```
 
-## 6. 你负责的 3-4 模块具体落点
+## 7. 当前关键接口
 
-### 模块 3：自动化任务分发系统
-
-你要负责的核心不是“提醒插件”，而是把 `actionItems` 稳定转成系统任务：
-
-- 接收模块 2 的结构化输出
-- 提供任务导入确认页
-- 提供任务导入接口
-- 完成 `actionItems -> tasks` 字段映射
-- 保存任务到数据库
-- 支持修改负责人、截止时间、优先级和状态
-
-对应代码落点建议：
-
-- `apps/web/src/features/task/import-review`
-- `apps/api/src/modules/task`
-- `apps/api/src/modules/assignment`
-
-### 模块 4：极简可视化看板
-
-你要负责的是让任务可以被看见、被管理、被追踪：
-
-- 三列看板 To Do / Doing / Done
-- 任务详情抽屉
-- 状态流转
-- 顶部统计区
-- 简版周报摘要
-
-对应代码落点建议：
-
-- `apps/web/src/features/board`
-- `apps/web/src/features/task`
-- `apps/api/src/modules/board`
-
-## 7. 最小接口清单
-
-建议优先实现这 4 个接口：
+### 认证与入口
 
 ```text
-POST   /api/tasks/import-from-action-items
-GET    /api/tasks
-PATCH  /api/tasks/:id
-GET    /api/board
+POST /api/auth/login
+POST /api/auth/logout
+GET  /api/users/me
+GET  /api/members/status
 ```
 
-如果时间允许，再补：
+### 模块 3 关键接口
 
 ```text
-GET    /api/board/stats
-GET    /api/tasks/:id
+POST /api/meeting-intakes/parse
+POST /api/meeting-intakes/:id/import-to-board
+POST /api/tasks
+POST /api/tasks/import-from-action-items
+PATCH /api/tasks/:id
+GET  /api/tasks/:id/activity
 ```
 
-## 8. 数据库表（当前）
+### 模块 4 关键接口
 
-当前已建成并使用以下核心表：
+```text
+GET /api/tasks
+GET /api/tasks/:id
+GET /api/board
+GET /api/board/stats
+```
 
-- `tasks`
-- `members`
-- `meetings`
-- `meeting_participants`
-- `task_activity_logs`
+## 8. 当前版本的真实边界
 
-数据库文件位于 `data/meeting2action.db`。
+- 当前登录模型已经落地，但仍是本地轻量账号体系
+- 登录用户名当前使用成员姓名，`studentId` 已入库但暂未作为登录主键
+- `owner_member_id` 已进入任务模型，但 `owner_name` 文本回退仍在保留
+- `apps/worker` 目录仍然预留，提醒、周报、异步同步尚未实现
+- 当前没有正式自动化测试体系
 
-## 9. 下一阶段推荐顺序
+## 9. 下一阶段建议顺序
+
+1. 完成角色 / 权限边界细化
+2. 统一成员账号文案与登录标识（姓名 / studentId）
+3. 增加前端分页、批量操作、归档视图
+4. 落地 Worker 提醒与汇总能力
+5. 补齐自动化测试
 
 1. 补后端数据约束与错误码规范（成员同名、输入校验）。
 2. 补任务搜索/排序/手动创建。

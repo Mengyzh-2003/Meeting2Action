@@ -1,3 +1,7 @@
+-- Core schema loaded at startup from sqlite-client.ts.
+-- meeting_intakes and user_sessions are created during bootstrap append logic.
+-- Legacy database compatibility migrations may additionally create unique indexes for members.name and members.student_id.
+
 CREATE TABLE IF NOT EXISTS tasks (
   id TEXT NOT NULL PRIMARY KEY,
   source_action_item_id TEXT NOT NULL,

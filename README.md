@@ -1,63 +1,64 @@
 # 会易达 OS（Meeting2Action）
 
-> **AI Agent 驱动型项目管理 OS，专为科研与研发团队设计的虚拟项目经理。**
+> AI Agent 驱动型项目管理 OS，面向科研组会与研发团队协作的本地化 MVP。
 
-会易达将原本碎片化、口语化的会议共识，自动转化为可量化、可追踪的工程任务，让每一场组会都真正成为生产力落地的起点。
+会易达把原本碎片化、口语化的会议共识，转成可落库、可追踪、可持续流转的任务与协作数据，让组会真正进入“解析 - 分发 - 执行 - 追踪”的闭环。
 
 ---
 
 ## 产品定位
 
-会易达不是单纯的会议记录工具，而是跨越"语义理解"与"任务执行"之间鸿沟的 AI 项目管理系统。核心价值链：
+会易达不是单纯的会议记录工具，而是把会议内容继续推进到任务执行层的轻量项目管理系统。当前核心链路为：
 
-```
-会议纪要 → AI 语义解析 → 结构化行动项 → 看板任务 → 团队执行追踪
+```text
+会议纪要 -> AI / 规则解析 -> 结构化行动项 -> 任务导入 -> 看板追踪 -> 会议与成员协同
 ```
 
 ---
 
-## 已实现功能
+## 当前已实现功能
 
-### 阶段一：智能信息捕获（Intake Stage）
+### 1. 智能信息捕获与解析
 
-- **多模式输入**：支持粘贴会议纪要文本、上传文本文件（`.txt` / `.md` / `.json`）
-- **解析模式选择**：Auto（自动选最优引擎）/ LLM（强制调 AI）/ Heuristic（纯规则）
-- **解析历史管理**：记录每次解析结果，支持重新加载和删除
-- **解析中状态反馈**：按钮 loading 动画 + 实时引擎标识（如「✦ Claude Sonnet」）
+- 支持粘贴会议纪要文本、上传文本文件（.txt / .md / .json / .csv）
+- 支持 auto、llm、heuristic 三种解析模式
+- 当配置 Anthropic 或 OpenAI 环境变量时优先调用大模型
+- 当没有可用 API key 时自动回退到规则引擎，不阻塞系统运行
+- 解析记录支持保存、列表查询、单条查看、删除、再次导入
 
-### 阶段二：AI 语义深度解析（Intelligence Stage）
+### 2. 任务导入与工作台
 
-解析引擎按优先级自动降级：
+- 支持将 actionItems 批量导入任务库
+- 支持手动创建任务
+- 支持任务列表查询、详情查看、状态更新、负责人更新、截止日期更新、删除
+- 支持关键词搜索、排序，以及后端分页参数 page / pageSize
+- 支持任务活动记录查询
+- 支持看板聚合数据和统计数据查询
 
-| 引擎 | 条件 | 能力 |
-|---|---|---|
-| **Claude LLM**（默认） | 配置 `ANTHROPIC_API_KEY` | 深度语义理解，自动识别责任人/截止时间/优先级/验收标准，相对日期换算 |
-| **OpenAI LLM** | 配置 `OPENAI_API_KEY` | 同上，结构化 JSON schema 输出 |
-| **Heuristic 规则引擎** | 兜底，无需 API | 关键词触发，支持中文日期推断，无需网络 |
+### 3. 极简可视化看板
 
-每条行动项自动提取：**任务标题、描述、责任人、截止日期、优先级、验收标准、来源原文、置信度、标签**。
+- 三栏 Kanban：To Do / Doing / Done
+- 风险、负责人、状态等维度筛选
+- 任务详情抽屉编辑
+- 看板统计区与近期任务展示
 
-### 阶段三：任务分发与导入（Execution Stage）
+### 4. 成员与会议管理
 
-- **导入确认页**：解析结果可逐条编辑（标题、责任人下拉选人、截止日期、优先级），确认后一键导入
-- **责任人成员库联动**：下拉选人显示成员彩色头像，与成员管理模块实时同步
-- **AI 已识别字段自动预填**：置信度高的字段直接填入，降低人工录入成本
-- **一键导入看板**：确认后批量写入任务数据库，自动跳转看板
+- 成员支持新增 / 查询 / 编辑 / 删除
+- 成员字段当前为姓名、studentId、degreeType
+- 新增成员时自动生成 6 位初始密码，接口只在创建成功当次返回
+- 会议支持新增 / 查询 / 编辑 / 删除
+- 支持维护参会成员关系
+- 支持通过腾讯会议协议快捷拉起会议
 
-### 阶段四：可视化看板（Visualization Stage）
+### 5. 登录与本地会话
 
-- **三栏 Kanban**：待办（To Do）/ 进行中（Doing）/ 已完成（Done）
-- **多维筛选**：按状态、负责人、风险等级独立过滤，支持组合筛选
-- **任务详情抽屉**：右侧滑出，支持负责人切换、截止时间滚轮调整，自动保存
-- **任务溯源**：每条任务保留来源原文（`sourceText`），可追溯至原始会议语句
-- **统计面板**：总任务数、进行中、逾期、高优先级等看板数据
-
-### 团队与会议管理
-
-- **成员管理**：新增 / 查询 / 编辑 / 删除，支持姓名搜索，表格视图
-- **会议管理**：新增（含日期时间选择器）/ 查询 / 编辑 / 删除
-- **参会人管理**：会议创建时选人，也可事后独立维护
-- **一键拉起腾讯会议**：每个会议卡片内置「🎥 腾讯会议」按钮，触发 `wemeet://` 协议
+- 新增独立全屏登录页
+- 支持用户名（当前使用成员姓名）+ 密码登录
+- 登录后前端可恢复本地会话
+- 后端提供登录、登出、当前用户接口
+- 写操作已接入登录校验
+- 当系统中还没有成员时，可在登录页直接创建首位成员并自动登录
 
 ---
 
@@ -65,11 +66,11 @@
 
 | 层级 | 技术 |
 |---|---|
-| 前端 | TypeScript + esbuild + 原生 HTML/CSS（Apple 风格 UI） |
-| 后端 | Node.js 原生 HTTP（无框架）+ TypeScript |
-| 数据库 | SQLite（`node:sqlite`，Node.js 22 内置） |
-| AI 集成 | Anthropic SDK（`@anthropic-ai/sdk`），支持 Claude / OpenAI / 规则引擎 |
-| 项目结构 | Monorepo，共享类型包 `packages/shared` |
+| 前端 | TypeScript + esbuild + 原生 HTML / CSS |
+| 后端 | Node.js 原生 HTTP + TypeScript |
+| 数据库 | SQLite（node:sqlite） |
+| AI 集成 | Anthropic SDK + OpenAI 兼容调用 + Heuristic 规则引擎 |
+| 项目结构 | Monorepo，共享类型位于 packages/shared |
 
 ---
 
@@ -78,20 +79,25 @@
 ```text
 Meeting2Action/
 ├─ apps/
-│  ├─ api/               # 后端服务（127.0.0.1:3001）
-│  │  └─ src/modules/    # task / board / member / meeting / intake
-│  ├─ web/               # 前端页面（127.0.0.1:3000）
-│  └─ worker/            # 预留（异步任务/提醒）
+│  ├─ api/
+│  │  └─ src/modules/
+│  │     ├─ auth/
+│  │     ├─ intake/
+│  │     ├─ task/
+│  │     ├─ member/
+│  │     └─ meeting/
+│  ├─ web/
+│  └─ worker/                # 预留，当前未落地
 ├─ packages/
-│  └─ shared/            # 共享类型定义与 JSON Schema
+│  └─ shared/
 ├─ data/
-│  └─ meeting2action.db  # SQLite 数据库文件
+│  └─ meeting2action.db
 ├─ docs/
-│  ├─ api/               # 后端接口文档
-│  └─ product/           # 产品架构文档
+│  ├─ api/
+│  └─ product/
 ├─ scripts/
-│  └─ start-dev.cmd      # Windows 一键启动脚本
-└─ package.json
+│  └─ start-dev.cmd
+└─ README.md
 ```
 
 ---
@@ -100,75 +106,97 @@ Meeting2Action/
 
 ### 环境要求
 
-- Node.js 22+（内置 `node:sqlite`）
+- Node.js 22+
 - npm 10+
 
-### 方式 A：一键启动（Windows）
+### 方式 A：Windows 一键启动
 
 ```bat
 scripts\start-dev.cmd
 ```
 
-脚本自动安装依赖、启动 API 和 Web 服务、打开浏览器。
+脚本会自动安装依赖、启动 API 和 Web 服务，并在浏览器中打开页面。
 
 ### 方式 B：手动启动
 
 ```bash
 npm install
-# 终端 1
 npm run dev:api
-# 终端 2
 npm run dev:web
 ```
 
-### 启用 AI 解析
+### 首次进入系统
+
+如果数据库中还没有成员，进入登录页后会自动切换到“创建首位成员”模式：
+
+- 输入姓名、studentId、培养层次
+- 系统生成 6 位初始密码
+- 创建完成后自动登录
+
+### 登录方式
+
+- 用户名：当前为成员姓名
+- 密码：创建成员时系统生成的 6 位初始密码
+
+### AI 解析环境变量
 
 ```bash
-# 使用 Claude（推荐）
-ANTHROPIC_API_KEY=sk-ant-xxx npm run dev:api
-
-# 使用代理服务
-ANTHROPIC_AUTH_TOKEN=your-token npm run dev:api
+ANTHROPIC_API_KEY=xxx npm run dev:api
+OPENAI_API_KEY=xxx npm run dev:api
 ```
 
 访问地址：
 
-- **Web 前端**：`http://127.0.0.1:3000`
-- **API 服务**：`http://127.0.0.1:3001`
-- **健康检查**：`GET http://127.0.0.1:3001/health`
+- Web：http://127.0.0.1:3000
+- API：http://127.0.0.1:3001
+- 健康检查：GET /health
 
 ---
 
 ## 后端 API 总览
 
 ### 健康检查
-```
-GET  /health
+
+```text
+GET /health
 ```
 
-### 会议解析（Intake）
-```
-POST   /api/meeting-intakes/parse                   # 解析会议纪要
-POST   /api/meeting-intakes/:id/import-to-board     # 导入看板
-GET    /api/meeting-intakes                         # 查询解析记录列表
-GET    /api/meeting-intakes/:id                     # 查询单条记录
-DELETE /api/meeting-intakes/:id                     # 删除记录
+### 认证与会话
+
+```text
+POST /api/auth/login
+POST /api/auth/logout
+GET  /api/users/me
 ```
 
-### 任务与看板（Task / Board）
-```
-POST   /api/tasks/import-from-action-items          # 批量导入行动项
-GET    /api/tasks                                   # 查询任务列表
-GET    /api/tasks/:id                               # 查询任务详情
-PATCH  /api/tasks/:id                               # 更新任务
-DELETE /api/tasks/:id                               # 删除任务
-GET    /api/tasks/:id/activity                      # 查询任务操作记录
-GET    /api/board                                   # 看板聚合数据
-GET    /api/board/stats                             # 看板统计数据
+### 会议纪要解析
+
+```text
+POST   /api/meeting-intakes/parse
+POST   /api/meeting-intakes/:id/import-to-board
+GET    /api/meeting-intakes
+GET    /api/meeting-intakes/:id
+DELETE /api/meeting-intakes/:id
 ```
 
-### 成员（Member）
+### 任务与看板
+
+```text
+POST   /api/tasks
+POST   /api/tasks/import-from-action-items
+GET    /api/tasks
+GET    /api/tasks/:id
+PATCH  /api/tasks/:id
+DELETE /api/tasks/:id
+GET    /api/tasks/:id/activity
+GET    /api/board
+GET    /api/board/stats
 ```
+
+### 成员
+
+```text
+GET    /api/members/status
 GET    /api/members
 GET    /api/members/:id
 POST   /api/members
@@ -176,26 +204,34 @@ PATCH  /api/members/:id
 DELETE /api/members/:id
 ```
 
-### 会议（Meeting）
-```
+### 会议
+
+```text
 GET    /api/meetings
 GET    /api/meetings/:id
+GET    /api/meetings/:id/participants
 POST   /api/meetings
 PATCH  /api/meetings/:id
-DELETE /api/meetings/:id
-GET    /api/meetings/:id/participants
 PATCH  /api/meetings/:id/participants
+DELETE /api/meetings/:id
 ```
+
+说明：
+
+- 登录相关接口和受保护接口支持 Bearer token，也兼容 X-Session-Token
+- 当前写操作默认需要登录
+- 成员列表与成员详情当前也要求登录
+- 创建成员有一个特例：当系统还没有任何成员时，允许匿名创建首位成员
 
 ---
 
 ## 常用命令
 
 ```bash
-npm run dev:api      # 启动后端服务
-npm run dev:web      # 启动前端开发服务（含热更新）
-npm run build:web    # 打包前端到 apps/web/dist/main.js
-npm run check:api    # TypeScript 类型检查
+npm run dev:api
+npm run dev:web
+npm run build:web
+npm run check:api
 ```
 
 ---
@@ -204,23 +240,40 @@ npm run check:api    # TypeScript 类型检查
 
 | 文档 | 说明 |
 |---|---|
-| `docs/api/intake-api.md` | 会议解析接口详细说明（含请求/响应示例、引擎降级策略、规则引擎说明） |
-| `docs/api/members-meetings-api.md` | 成员与会议接口说明 |
-| `docs/api/action-items-fields.md` | ActionItem 字段规范 |
-| `docs/api/action-items-schema.md` | ActionItem JSON Schema 定义 |
-| `docs/api/tasks-table.sql` | tasks 表 DDL |
-| `docs/product/module-3-4-architecture.md` | 任务分发与看板模块架构图 |
+| docs/api/intake-api.md | 会议纪要解析与导入接口说明 |
+| docs/api/members-meetings-api.md | 成员、会议、参会人接口说明 |
+| docs/api/action-items-fields.md | ActionItem 字段规范 |
+| docs/api/action-items-schema.md | ActionItem JSON Schema |
+| docs/api/tasks-table.sql | 当前 SQLite 核心 schema |
+| docs/product/module-3-4-architecture.md | 模块 3-4 当前架构说明 |
+| docs/product/supplement-current-status.md | 基于当前代码整理的现状补充说明 |
 
 ---
 
-## 已知限制与规划中功能
+## 当前限制与后续优先项
 
-| 项目 | 状态 |
+| 项目 | 当前状态 |
 |---|---|
-| 任务负责人外键关联（`owner_member_id`） | 已实现迁移逻辑，前端仍用 `ownerName` 文本匹配 |
-| 任务手动创建表单 | 未实现 |
-| 任务搜索与排序 | 未实现 |
-| 成员唯一约束（数据库层） | 前端已拦截，后端待补 |
-| Worker 异步任务（逾期提醒、周报） | 目录预留，未实现 |
-| 自动化测试 | 未补充 |
-| 音视频文件导入与转写 | 未实现（当前支持文本文件） |
+| 登录模型 | 已有本地账号与会话，但仍是轻量单团队模型，无角色与细粒度权限 |
+| 用户名规则 | 当前登录用户名使用成员姓名，studentId 已入库但暂未作为登录主键 |
+| 密码管理 | 已有初始密码生成与校验，但无重置密码、修改密码能力 |
+| 任务规模化管理 | 已有搜索、排序、分页参数，但前端仍缺完整分页与批量操作 |
+| 负责人关系 | 已补 owner_member_id，但仍保留 ownerName 文本回退逻辑 |
+| Worker 异步能力 | apps/worker 仍为预留目录，逾期提醒 / 周报未落地 |
+| 自动化测试 | 尚未建立系统化测试 |
+| 会议输入源 | 当前仍以文本和文本文件为主，未接入录音转写 |
+
+---
+
+## 当前阶段结论
+
+当前的 Meeting2Action 已经是一个可运行、可持久化、具备登录会话、能完成“会议解析 -> 任务导入 -> 看板追踪 -> 成员会议协同”闭环的 MVP。
+
+如果目标是课程项目、答辩演示或本地原型展示，它已经具备完整主体能力。
+
+如果目标是更正式的产品化版本，下一步应优先补强：
+
+1. 权限模型与账号管理
+2. 测试与可靠性
+3. 任务规模化管理能力
+4. Worker 自动化能力
