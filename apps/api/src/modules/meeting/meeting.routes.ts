@@ -30,11 +30,13 @@ export function createMeetingRoutes(meetingController: MeetingController): Route
       method: 'POST',
       pattern: /^\/api\/meetings$/,
       handler: meetingController.createMeeting,
+      requireAuth: true,
     },
     {
       method: 'PATCH',
       pattern: /^\/api\/meetings\/([^/]+)\/participants$/,
       handler: meetingController.updateMeetingParticipants,
+      requireAuth: true,
       getParams: (pathname) => {
         const match = pathname.match(/^\/api\/meetings\/([^/]+)\/participants$/);
         return { id: match?.[1] ?? '' };
@@ -44,6 +46,7 @@ export function createMeetingRoutes(meetingController: MeetingController): Route
       method: 'PATCH',
       pattern: /^\/api\/meetings\/([^/]+)$/,
       handler: meetingController.updateMeeting,
+      requireAuth: true,
       getParams: (pathname) => {
         const match = pathname.match(/^\/api\/meetings\/([^/]+)$/);
         return { id: match?.[1] ?? '' };
@@ -53,6 +56,7 @@ export function createMeetingRoutes(meetingController: MeetingController): Route
       method: 'DELETE',
       pattern: /^\/api\/meetings\/([^/]+)$/,
       handler: meetingController.deleteMeeting,
+      requireAuth: true,
       getParams: (pathname) => {
         const match = pathname.match(/^\/api\/meetings\/([^/]+)$/);
         return { id: match?.[1] ?? '' };

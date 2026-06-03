@@ -1,14 +1,22 @@
 import type {
   BoardStats,
   BoardResponse,
+  CreateTaskInput,
   ImportActionItemsInput,
   ListTasksQuery,
+  ListTasksResult,
   Task,
   TaskActivityLog,
   UpdateTaskInput,
 } from '../../../../../packages/shared/src';
+import {
+  isSortOrder,
+  isTaskPriority,
+  isTaskSortField,
+  isTaskStatus,
+} from '../../../../../packages/shared/src';
 import type { DatabaseClient, DatabaseParameter } from '../../db/database-client';
-import { NotFoundError } from '../../errors';
+import { NotFoundError, ValidationError } from '../../errors';
 
 function createTaskId(sourceActionItemId: string): string {
   return `task_${sourceActionItemId}`;
@@ -20,6 +28,10 @@ function createLogId(taskId: string, index: number): string {
 
 function createRuntimeLogId(taskId: string): string {
   return `log_${taskId}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function createManualTaskSourceActionItemId(): string {
+  return `manual_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
 type TaskRow = {
@@ -62,6 +74,55 @@ function mapTaskRow(row: TaskRow): Task {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
+}
+
+function normalizeNullableText(value: string | null | undefined): string | null {
+  if (value === undefined || value === null) {
+    return null;
+  }
+
+  const normalized = value.trim();
+  return normalized.length > 0 ? normalized : null;
+}
+
+function normalizeTags(tags: string[] | undefined): string[] {
+  if (!Array.isArray(tags)) {
+    return [];
+  }
+
+  return Array.from(
+    new Set(tags.map((tag) => tag.trim()).filter((tag) => tag.length > 0)),
+  );
+}
+
+function buildOrderClause(sortBy: ListTasksQuery['sortBy'], sortOrder: ListTasksQuery['sortOrder']): string {
+  const safeSortBy = sortBy ?? 'createdAt';
+  const safeSortOrder = sortOrder ?? 'desc';
+
+  if (!isTaskSortField(safeSortBy)) {
+    throw new ValidationError('Task sortBy is invalid.');
+  }
+
+  if (!isSortOrder(safeSortOrder)) {
+    throw new ValidationError('Task sortOrder must be asc or desc.');
+  }
+
+  const direction = safeSortOrder.toUpperCase();
+
+  switch (safeSortBy) {
+    case 'updatedAt':
+      return `updated_at ${direction}, created_at DESC`;
+    case 'dueDate':
+      return `CASE WHEN due_date IS NULL THEN 1 ELSE 0 END ASC, due_date ${direction}, created_at DESC`;
+    case 'title':
+      return `title COLLATE NOCASE ${direction}, created_at DESC`;
+    case 'priority':
+      return `CASE priority WHEN 'low' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END ${direction}, created_at DESC`;
+    case 'status':
+      return `CASE status WHEN 'todo' THEN 1 WHEN 'doing' THEN 2 ELSE 3 END ${direction}, created_at DESC`;
+    default:
+      return `created_at ${direction}`;
+  }
 }
 
 function isDueSoon(dueDate: string | null): boolean {
@@ -189,6 +250,126 @@ export class TaskService {
     );
   }
 
+  async createTask(input: CreateTaskInput): Promise<Task> {
+    const title = input.title?.trim();
+    const description = input.description?.trim();
+
+    if (!title) {
+      throw new ValidationError('Task title is required.');
+    }
+
+    if (!description) {
+      throw new ValidationError('Task description is required.');
+    }
+
+    if (input.priority !== undefined && !isTaskPriority(input.priority)) {
+      throw new ValidationError('Task priority must be low, medium or high.');
+    }
+
+    if (input.status !== undefined && !isTaskStatus(input.status)) {
+      throw new ValidationError('Task status must be todo, doing or done.');
+    }
+
+    if (
+      input.confidence !== undefined
+      && (typeof input.confidence !== 'number' || input.confidence < 0 || input.confidence > 1)
+    ) {
+      throw new ValidationError('Task confidence must be a number between 0 and 1.');
+    }
+
+    const owner = await this.resolveOwnerReference({
+      ownerMemberId: input.ownerMemberId,
+      ownerName: input.ownerName,
+    });
+    const sourceActionItemId = input.sourceActionItemId?.trim() || createManualTaskSourceActionItemId();
+    const createdAt = new Date().toISOString();
+    const task: Task = {
+      id: createTaskId(sourceActionItemId),
+      sourceActionItemId,
+      meetingId: input.meetingId ?? null,
+      ownerMemberId: owner.ownerMemberId,
+      title,
+      description,
+      ownerName: owner.ownerName,
+      dueDate: normalizeNullableText(input.dueDate),
+      priority: input.priority ?? 'medium',
+      status: input.status ?? 'todo',
+      acceptanceCriteria: normalizeNullableText(input.acceptanceCriteria),
+      sourceText: normalizeNullableText(input.sourceText) ?? description,
+      sourceTimestamp: normalizeNullableText(input.sourceTimestamp),
+      confidence: input.confidence ?? 1,
+      tags: normalizeTags(input.tags),
+      createdAt,
+      updatedAt: createdAt,
+    };
+
+    await this.db.run(
+      `
+        INSERT INTO tasks (
+          id,
+          source_action_item_id,
+          meeting_id,
+          owner_member_id,
+          title,
+          description,
+          owner_name,
+          due_date,
+          priority,
+          status,
+          acceptance_criteria,
+          source_text,
+          source_timestamp,
+          confidence,
+          tags,
+          created_at,
+          updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `,
+      [
+        task.id,
+        task.sourceActionItemId,
+        task.meetingId,
+        task.ownerMemberId,
+        task.title,
+        task.description,
+        task.ownerName,
+        task.dueDate,
+        task.priority,
+        task.status,
+        task.acceptanceCriteria,
+        task.sourceText,
+        task.sourceTimestamp,
+        task.confidence,
+        JSON.stringify(task.tags),
+        task.createdAt,
+        task.updatedAt,
+      ],
+    );
+
+    await this.db.run(
+      `
+        INSERT INTO task_activity_logs (
+          id,
+          task_id,
+          action_type,
+          action_detail,
+          operator_name,
+          created_at
+        ) VALUES (?, ?, ?, ?, ?, ?)
+      `,
+      [
+        createRuntimeLogId(task.id),
+        task.id,
+        'created',
+        '手动创建任务。',
+        input.operatorName ?? 'system',
+        createdAt,
+      ],
+    );
+
+    return task;
+  }
+
   async importFromActionItems(input: ImportActionItemsInput): Promise<Task[]> {
     const createdTasks: Task[] = [];
     const operatorName = input.operatorName ?? 'system';
@@ -290,9 +471,22 @@ export class TaskService {
     return createdTasks;
   }
 
-  async listTasks(query: ListTasksQuery = {}): Promise<Task[]> {
+  async listTasks(query: ListTasksQuery = {}): Promise<ListTasksResult> {
+    if (query.status !== undefined && !isTaskStatus(query.status)) {
+      throw new ValidationError('Task status must be todo, doing or done.');
+    }
+
+    if (query.page !== undefined && (!Number.isInteger(query.page) || query.page < 1)) {
+      throw new ValidationError('Task page must be a positive integer.');
+    }
+
+    if (query.pageSize !== undefined && (!Number.isInteger(query.pageSize) || query.pageSize < 1 || query.pageSize > 100)) {
+      throw new ValidationError('Task pageSize must be an integer between 1 and 100.');
+    }
+
     const filters: string[] = [];
     const params: DatabaseParameter[] = [];
+    const keyword = query.keyword?.trim();
 
     if (query.status) {
       filters.push('status = ?');
@@ -314,7 +508,31 @@ export class TaskService {
       params.push(query.meetingId);
     }
 
+    if (keyword) {
+      const likeKeyword = `%${keyword}%`;
+      filters.push('(title LIKE ? OR description LIKE ? OR owner_name LIKE ? OR source_text LIKE ?)');
+      params.push(likeKeyword, likeKeyword, likeKeyword, likeKeyword);
+    }
+
     const whereClause = filters.length > 0 ? `WHERE ${filters.join(' AND ')}` : '';
+    const totalRow = await this.db.get<{ total: number }>(
+      `
+        SELECT COUNT(*) AS total
+        FROM tasks
+        ${whereClause}
+      `,
+      params,
+    );
+    const total = totalRow?.total ?? 0;
+    const usePagination = query.page !== undefined || query.pageSize !== undefined;
+    const page = usePagination ? (query.page ?? 1) : 1;
+    const pageSize = usePagination ? (query.pageSize ?? 20) : total;
+    const paginationClause = usePagination ? 'LIMIT ? OFFSET ?' : '';
+    const selectParams = [...params];
+
+    if (usePagination) {
+      selectParams.push(pageSize, (page - 1) * pageSize);
+    }
 
     const rows = await this.db.all<TaskRow>(
       `
@@ -338,12 +556,21 @@ export class TaskService {
           updated_at
         FROM tasks
         ${whereClause}
-        ORDER BY created_at DESC
+        ORDER BY ${buildOrderClause(query.sortBy, query.sortOrder)}
+        ${paginationClause}
       `,
-      params,
+      selectParams,
     );
 
-    return rows.map(mapTaskRow);
+    const items = rows.map(mapTaskRow);
+
+    return {
+      items,
+      count: items.length,
+      total,
+      page,
+      pageSize: usePagination ? pageSize : items.length,
+    };
   }
 
   async getTaskById(taskId: string): Promise<Task> {
@@ -474,7 +701,7 @@ export class TaskService {
   }
 
   async getBoard(): Promise<BoardResponse> {
-    const tasks = await this.listTasks();
+    const tasks = (await this.listTasks()).items;
     const columns: BoardResponse['columns'] = [
       {
         status: 'todo',
@@ -500,7 +727,7 @@ export class TaskService {
   }
 
   async getBoardStats(): Promise<BoardStats> {
-    const tasks = await this.listTasks();
+    const tasks = (await this.listTasks()).items;
     return buildBoardStats(tasks);
   }
 

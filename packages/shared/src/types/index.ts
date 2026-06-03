@@ -1,4 +1,5 @@
 export * from './action-item';
+export * from './auth';
 export * from './member';
 export * from './meeting';
 export * from './meeting-intake';

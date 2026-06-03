@@ -1,8 +1,24 @@
+import { randomInt } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
 import { mkdirSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 
 import type { DatabaseClient, DatabaseParameter } from './database-client';
+import { hashPassword, isPasswordHash } from '../modules/auth/password';
+
+function generateSixDigitPassword(): string {
+  return String(randomInt(100000, 1000000));
+}
+
+function generateFallbackStudentId(usedStudentIds: Set<string>): string {
+  let nextStudentId = '';
+
+  while (!nextStudentId || usedStudentIds.has(nextStudentId)) {
+    nextStudentId = String(randomInt(100000000, 1000000000));
+  }
+
+  return nextStudentId;
+}
 
 function getDatabasePath(): string {
   return process.env.MEETING2ACTION_DB_PATH ?? resolve(process.cwd(), 'data', 'meeting2action.db');
@@ -10,10 +26,15 @@ function getDatabasePath(): string {
 
 function loadSchemaSql(): string {
   const baseSchemaPath = resolve(process.cwd(), 'docs', 'api', 'tasks-table.sql');
-  const baseSchema = readFileSync(baseSchemaPath, 'utf8').replace(
-    "CREATE INDEX IF NOT EXISTS idx_tasks_owner_member_id ON tasks (owner_member_id);\n",
-    '',
-  );
+  const baseSchema = readFileSync(baseSchemaPath, 'utf8')
+    .replace(
+      /CREATE INDEX IF NOT EXISTS idx_tasks_owner_member_id ON tasks \(owner_member_id\);\r?\n?/,
+      '',
+    )
+    .replace(
+      /CREATE INDEX IF NOT EXISTS idx_members_student_id ON members \(student_id\);\r?\n?/,
+      '',
+    );
 
   const intakeSchema = `
 CREATE TABLE IF NOT EXISTS meeting_intakes (
@@ -49,6 +70,17 @@ BEGIN
   SET updated_at = CURRENT_TIMESTAMP
   WHERE id = OLD.id;
 END;
+
+CREATE TABLE IF NOT EXISTS user_sessions (
+  token TEXT NOT NULL PRIMARY KEY,
+  member_id TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  expires_at TEXT NOT NULL,
+  FOREIGN KEY (member_id) REFERENCES members (id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_sessions_member_id ON user_sessions (member_id);
+CREATE INDEX IF NOT EXISTS idx_user_sessions_expires_at ON user_sessions (expires_at);
 `;
 
   return `${baseSchema}\n${intakeSchema}`;
@@ -62,7 +94,69 @@ export class SqliteDatabaseClient implements DatabaseClient {
     this.database = new DatabaseSync(databasePath);
     this.database.exec('PRAGMA foreign_keys = ON;');
     this.database.exec(loadSchemaSql());
+    this.migrateMemberNameUniqueness();
+    this.migrateMemberCredentials();
     this.migrateTaskOwnerMember();
+  }
+
+  private migrateMemberNameUniqueness(): void {
+    this.database.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_members_name_unique ON members (name);');
+  }
+
+  private migrateMemberCredentials(): void {
+    const columns = this.database.prepare('PRAGMA table_info(members)').all() as Array<{ name: string }>;
+    const hasGrade = columns.some((column) => column.name === 'grade');
+    const hasStudentId = columns.some((column) => column.name === 'student_id');
+    const hasPassword = columns.some((column) => column.name === 'password');
+
+    if (!hasStudentId) {
+      this.database.exec('ALTER TABLE members ADD COLUMN student_id TEXT;');
+    }
+
+    if (!hasPassword) {
+      this.database.exec('ALTER TABLE members ADD COLUMN password TEXT;');
+    }
+
+    type LegacyMemberRow = {
+      id: string;
+      legacy_student_id: string | null;
+      grade: string | null;
+      password: string | null;
+    };
+
+    const rows = this.database.prepare(`
+      SELECT
+        id,
+        student_id AS legacy_student_id,
+        ${hasGrade ? 'grade' : 'NULL'} AS grade,
+        password
+      FROM members
+      ORDER BY created_at ASC, name ASC
+    `).all() as LegacyMemberRow[];
+
+    const usedStudentIds = new Set<string>();
+    const updateStudentStatement = this.database.prepare('UPDATE members SET student_id = ? WHERE id = ?');
+    const updatePasswordStatement = this.database.prepare('UPDATE members SET password = ? WHERE id = ?');
+
+    for (const row of rows) {
+      const baseStudentId = row.legacy_student_id?.trim() || row.grade?.trim() || '';
+      const nextStudentId = !baseStudentId || usedStudentIds.has(baseStudentId)
+        ? generateFallbackStudentId(usedStudentIds)
+        : baseStudentId;
+
+      usedStudentIds.add(nextStudentId);
+      updateStudentStatement.run(nextStudentId, row.id);
+
+      const password = row.password?.trim();
+      if (!password) {
+        updatePasswordStatement.run(hashPassword(generateSixDigitPassword()), row.id);
+      } else if (!isPasswordHash(password)) {
+        updatePasswordStatement.run(hashPassword(password), row.id);
+      }
+    }
+
+    this.database.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_members_student_id_unique ON members (student_id);');
+    this.database.exec('CREATE INDEX IF NOT EXISTS idx_members_student_id ON members (student_id);');
   }
 
   private migrateTaskOwnerMember(): void {

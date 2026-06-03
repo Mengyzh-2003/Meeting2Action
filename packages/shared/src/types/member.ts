@@ -2,24 +2,30 @@ export const MEMBER_DEGREE_TYPES = ['master', 'phd'] as const;
 
 export type MemberDegreeType = (typeof MEMBER_DEGREE_TYPES)[number];
 
-export interface Member {
+export interface PublicMember {
   id: string;
   name: string;
-  grade: string;
+  studentId: string;
   degreeType: MemberDegreeType;
   createdAt: string;
   updatedAt: string;
 }
 
+export type Member = PublicMember;
+
+export interface CreatedMember extends PublicMember {
+  initialPassword: string;
+}
+
 export interface CreateMemberInput {
   name: string;
-  grade: string;
+  studentId: string;
   degreeType: MemberDegreeType;
 }
 
 export interface UpdateMemberInput {
   name?: string;
-  grade?: string;
+  studentId?: string;
   degreeType?: MemberDegreeType;
 }
 

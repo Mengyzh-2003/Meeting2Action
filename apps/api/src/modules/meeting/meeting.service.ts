@@ -24,7 +24,7 @@ type ParticipantRow = {
   created_at: string;
   id: string;
   name: string;
-  grade: string;
+  student_id: string;
   degree_type: MemberSummary['degreeType'];
 };
 
@@ -32,7 +32,7 @@ function mapParticipantRow(row: ParticipantRow): MemberSummary {
   return {
     id: row.id,
     name: row.name,
-    grade: row.grade,
+    studentId: row.student_id,
     degreeType: row.degree_type,
   };
 }
@@ -92,7 +92,7 @@ export class MeetingService {
           mp.created_at,
           m.id,
           m.name,
-          m.grade,
+          m.student_id,
           m.degree_type
         FROM meeting_participants mp
         INNER JOIN members m ON m.id = mp.member_id
@@ -181,7 +181,7 @@ export class MeetingService {
           mp.created_at,
           m.id,
           m.name,
-          m.grade,
+          m.student_id,
           m.degree_type
         FROM meeting_participants mp
         INNER JOIN members m ON m.id = mp.member_id

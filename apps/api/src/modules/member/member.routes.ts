@@ -7,11 +7,18 @@ export function createMemberRoutes(memberController: MemberController): RouteDef
       method: 'GET',
       pattern: /^\/api\/members$/,
       handler: memberController.listMembers,
+      requireAuth: true,
+    },
+    {
+      method: 'GET',
+      pattern: /^\/api\/members\/status$/,
+      handler: memberController.getMemberStatus,
     },
     {
       method: 'GET',
       pattern: /^\/api\/members\/([^/]+)$/,
       handler: memberController.getMemberById,
+      requireAuth: true,
       getParams: (pathname) => {
         const match = pathname.match(/^\/api\/members\/([^/]+)$/);
         return { id: match?.[1] ?? '' };
@@ -26,6 +33,7 @@ export function createMemberRoutes(memberController: MemberController): RouteDef
       method: 'PATCH',
       pattern: /^\/api\/members\/([^/]+)$/,
       handler: memberController.updateMember,
+      requireAuth: true,
       getParams: (pathname) => {
         const match = pathname.match(/^\/api\/members\/([^/]+)$/);
         return { id: match?.[1] ?? '' };
@@ -35,6 +43,7 @@ export function createMemberRoutes(memberController: MemberController): RouteDef
       method: 'DELETE',
       pattern: /^\/api\/members\/([^/]+)$/,
       handler: memberController.deleteMember,
+      requireAuth: true,
       getParams: (pathname) => {
         const match = pathname.match(/^\/api\/members\/([^/]+)$/);
         return { id: match?.[1] ?? '' };

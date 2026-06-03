@@ -3,55 +3,68 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>会易达 OS - 研发团队AI项目OS</title>
+    <title>会易达 OS - 研发团队 AI 项目 OS</title>
     <link rel="stylesheet" href="./src/styles.css" />
     <script defer src="./dist/main.js"></script>
     <script defer>
       document.addEventListener('DOMContentLoaded', () => {
         const tabs = document.querySelectorAll('.nav-tab');
         const views = document.querySelectorAll('.view-container');
-        tabs.forEach(tab => {
+        tabs.forEach((tab) => {
           tab.addEventListener('click', () => {
-            tabs.forEach(t => t.classList.remove('active'));
-            views.forEach(v => v.classList.remove('active'));
+            tabs.forEach((item) => item.classList.remove('active'));
+            views.forEach((view) => view.classList.remove('active'));
             tab.classList.add('active');
             const targetId = tab.getAttribute('data-target');
-            document.getElementById(targetId).classList.add('active');
+            if (targetId) {
+              document.getElementById(targetId)?.classList.add('active');
+            }
           });
         });
+
         const detailObserver = new MutationObserver(() => {
           const detailContent = document.getElementById('task-detail');
           if (detailContent && !detailContent.classList.contains('empty-state')) {
-            document.getElementById('task-drawer').classList.add('open');
+            document.getElementById('task-drawer')?.classList.add('open');
           }
         });
-        const dTarget = document.getElementById('task-detail');
-        if (dTarget) { detailObserver.observe(dTarget, { childList: true, subtree: true }); }
 
+        const detailTarget = document.getElementById('task-detail');
+        if (detailTarget) {
+          detailObserver.observe(detailTarget, { childList: true, subtree: true });
+        }
       });
-      function closeDrawer() { document.getElementById('task-drawer').classList.remove('open'); }
-      function closeDashboardTaskDetail() {
-        document.querySelectorAll('.urgent-task-item').forEach(c => c.classList.remove('active'));
-        document.getElementById('dashboard-activity-feed').style.display = 'block';
-        document.getElementById('dashboard-task-detail').style.display = 'none';
+
+      function closeDrawer() {
+        document.getElementById('task-drawer')?.classList.remove('open');
       }
-      function toggleUserDropdown(e) {
-        e.stopPropagation();
+
+      function closeDashboardTaskDetail() {
+        document.querySelectorAll('.urgent-task-item').forEach((card) => card.classList.remove('active'));
+        const activityFeed = document.getElementById('dashboard-activity-feed');
+        const taskDetail = document.getElementById('dashboard-task-detail');
+        if (activityFeed) {
+          activityFeed.style.display = 'block';
+        }
+        if (taskDetail) {
+          taskDetail.style.display = 'none';
+        }
+      }
+
+      function toggleUserDropdown(event) {
+        event.stopPropagation();
         const menu = document.getElementById('user-dropdown-menu');
         const badge = document.getElementById('nav-user-badge');
-        if (menu) {
-          menu.classList.toggle('open');
-        }
-        if (badge) {
-          badge.classList.toggle('open');
-        }
+        menu?.classList.toggle('open');
+        badge?.classList.toggle('open');
       }
-      document.addEventListener('click', (e) => {
-        document.querySelectorAll('.user-dropdown').forEach((el) => {
-          el.classList.remove('open');
+
+      document.addEventListener('click', () => {
+        document.querySelectorAll('.user-dropdown').forEach((element) => {
+          element.classList.remove('open');
         });
-        document.querySelectorAll('.current-user-badge').forEach((el) => {
-          el.classList.remove('open');
+        document.querySelectorAll('.current-user-badge').forEach((element) => {
+          element.classList.remove('open');
         });
       });
     </script>
@@ -63,73 +76,233 @@
         会易达 OS
       </div>
       <div class="nav-tabs">
-        <button class="nav-tab active" data-target="view-dashboard">📊 概览控制台</button>
-        <button class="nav-tab" data-target="view-inbox">📥 智能解析舱</button>
-        <button class="nav-tab" data-target="view-workspace">🗂️ 研发工作台</button>
-        <button class="nav-tab" data-target="view-hub">👥 资源中心</button>
+        <button class="nav-tab active" data-target="view-dashboard">概览控制台</button>
+        <button class="nav-tab" data-target="view-inbox">智能解析舱</button>
+        <button class="nav-tab" data-target="view-workspace">研发工作台</button>
+        <button class="nav-tab" data-target="view-hub">资源中心</button>
       </div>
       <div class="user-menu-container">
         <div class="current-user-badge" id="nav-user-badge" onclick="toggleUserDropdown(event)">
-          <div class="user-avatar" id="nav-user-avatar" style="background:#5AC8FA;color:white;">马</div>
-          <span id="nav-user-name">马瑀阔（博士三年级）</span>
+          <div class="user-avatar" id="nav-user-avatar" style="background:#5AC8FA;color:#FFFFFF;">未</div>
+          <span id="nav-user-name">请先登录</span>
           <span class="dropdown-icon">▼</span>
         </div>
         <div class="user-dropdown" id="user-dropdown-menu">
-          <div class="dropdown-header">切换团队成员</div>
+          <div class="dropdown-header">当前账号</div>
           <div id="dropdown-user-list">
-            <div class="dropdown-header" style="margin: 0; border: none; text-transform: none; letter-spacing: 0;">加载成员中...</div>
+            <div class="dropdown-header" style="margin:0; border:none; text-transform:none; letter-spacing:0;">请先在登录页完成登录</div>
           </div>
         </div>
       </div>
     </nav>
 
-    <!-- 视图 0：概览控制台 -->
+    <div id="auth-gate" class="auth-gate hidden">
+      <div class="auth-shell">
+        <section class="auth-hero">
+          <div class="auth-brand-row">
+            <div class="auth-brand-lockup">
+              <div class="auth-brand-mark"></div>
+              <div class="auth-brand-copy">
+                <strong>会易达 OS</strong>
+              </div>
+            </div>
+            <div class="auth-hero-badge">内部协作入口</div>
+          </div>
+
+          <div class="auth-hero-main">
+            <h1>登录</h1>
+            <p class="auth-hero-subtitle">从组会共识到行动项落地</p>
+          </div>
+
+          <div class="auth-flow-strip" aria-hidden="true">
+            <div class="auth-flow-step">
+              <span class="auth-step-icon auth-step-note">纪</span>
+              <span>会议纪要</span>
+            </div>
+            <span class="auth-flow-arrow">→</span>
+            <div class="auth-flow-step">
+              <span class="auth-step-icon auth-step-ai">AI</span>
+              <span>AI 解析</span>
+            </div>
+            <span class="auth-flow-arrow">→</span>
+            <div class="auth-flow-step">
+              <span class="auth-step-icon auth-step-action">行</span>
+              <span>行动项</span>
+            </div>
+            <span class="auth-flow-arrow">→</span>
+            <div class="auth-flow-step">
+              <span class="auth-step-icon auth-step-board">板</span>
+              <span>看板追踪</span>
+            </div>
+          </div>
+
+          <div class="auth-preview-board" aria-hidden="true">
+            <article class="auth-preview-panel auth-preview-panel-note">
+              <div class="auth-preview-heading">会议纪要</div>
+              <div class="auth-preview-caption">本次讨论聚焦于实验方案优化与数据对齐策略。</div>
+              <div class="auth-preview-skeleton">
+                <span></span>
+                <span></span>
+                <span></span>
+                <span></span>
+              </div>
+            </article>
+
+            <article class="auth-preview-panel auth-preview-panel-ai">
+              <div class="auth-preview-heading-row">
+                <div class="auth-preview-heading">AI 解析</div>
+                <div class="auth-preview-chip">AI</div>
+              </div>
+              <div class="auth-ai-list">
+                <div class="auth-ai-item"><span class="auth-ai-dot"></span><strong>识别关键信息</strong><em>8</em></div>
+                <div class="auth-ai-item"><span class="auth-ai-dot success"></span><strong>行动项建议</strong><em>5</em></div>
+                <div class="auth-ai-item"><span class="auth-ai-dot warning"></span><strong>风险与依赖</strong><em>3</em></div>
+              </div>
+            </article>
+
+            <article class="auth-preview-panel auth-preview-panel-actions">
+              <div class="auth-preview-heading">行动项</div>
+              <div class="auth-action-header">
+                <span>任务</span>
+                <span>负责人</span>
+                <span>截止时间</span>
+                <span>状态</span>
+              </div>
+              <div class="auth-action-list">
+                <div class="auth-action-row">
+                  <span>完善实验方案</span>
+                  <div class="auth-owner-stack"><i></i></div>
+                  <em>05-20</em>
+                  <label class="auth-action-status doing">进行中</label>
+                </div>
+                <div class="auth-action-row">
+                  <span>补充对照实验</span>
+                  <div class="auth-owner-stack"><i></i></div>
+                  <em>05-22</em>
+                  <label class="auth-action-status pending">待开始</label>
+                </div>
+                <div class="auth-action-row">
+                  <span>整理数据集</span>
+                  <div class="auth-owner-stack"><i></i></div>
+                  <em>05-24</em>
+                  <label class="auth-action-status done">已完成</label>
+                </div>
+                <div class="auth-action-row">
+                  <span>撰写分析脚本</span>
+                  <div class="auth-owner-stack"><i></i></div>
+                  <em>05-26</em>
+                  <label class="auth-action-status doing">进行中</label>
+                </div>
+              </div>
+            </article>
+
+            <article class="auth-preview-panel auth-preview-panel-board">
+              <div class="auth-preview-heading">看板追踪</div>
+              <div class="auth-board-list">
+                <div class="auth-board-item active"><span>进行中</span><em>2</em></div>
+                <div class="auth-board-item waiting"><span>待开始</span><em>2</em></div>
+                <div class="auth-board-item done"><span>已完成</span><em>1</em></div>
+                <div class="auth-board-item active"><span>复盘中</span><em>1</em></div>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <div class="auth-side-column">
+          <section class="auth-card">
+            <div class="auth-card-header">
+              <span id="auth-mode-label" class="auth-mode-label">账号登录</span>
+              <h2 id="auth-title">欢迎进入内部工作区</h2>
+            </div>
+
+            <div id="auth-feedback" class="auth-feedback tone-neutral hidden"></div>
+
+            <form id="auth-login-form" class="auth-form">
+              <label class="auth-field">
+                <span>用户名</span>
+                <input id="auth-student-id-input" class="apple-input" type="text" placeholder="请输入成员姓名" autocomplete="username" />
+              </label>
+              <label class="auth-field">
+                <span>密码</span>
+                <div class="auth-password-row">
+                  <input id="auth-password-input" class="apple-input" type="password" inputmode="numeric" maxlength="6" placeholder="请输入六位密码" autocomplete="current-password" />
+                  <button id="auth-password-toggle" class="auth-password-toggle" type="button" aria-label="显示密码">显示</button>
+                </div>
+              </label>
+              <button id="auth-login-button" class="apple-primary-btn" type="submit">登录</button>
+            </form>
+
+            <div id="auth-empty-state" class="auth-empty-state hidden">
+              <div class="auth-empty-title">当前还没有成员账号</div>
+            </div>
+
+            <form id="first-member-form" class="auth-form hidden">
+              <label class="auth-field">
+                <span>姓名</span>
+                <input id="first-member-name-input" class="apple-input" type="text" placeholder="首位成员姓名" />
+              </label>
+              <label class="auth-field">
+                <span>年级</span>
+                <input id="first-member-student-id-input" class="apple-input" type="text" placeholder="例如 一年级" />
+              </label>
+              <label class="auth-field">
+                <span>培养层次</span>
+                <select id="first-member-degree-type-input" class="apple-select">
+                  <option value="master">Master</option>
+                  <option value="phd">PhD</option>
+                </select>
+              </label>
+              <button id="create-first-member-button" class="apple-primary-btn" type="submit">创建首位成员并登录</button>
+              <div id="first-member-feedback" class="auth-feedback tone-neutral hidden"></div>
+            </form>
+          </section>
+
+          <div class="auth-card-footnote">
+            <span class="auth-footnote-shield"></span>
+            <span>本地成员账号 · 轻量会话模式</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <main id="view-dashboard" class="view-container active">
       <div class="dashboard-layout">
         <header class="welcome-header">
-          <h1 class="welcome-title" id="dashboard-welcome">上午好，马瑀阔。</h1>
-          <p class="welcome-subtitle">本周团队整体进度稳健，目前看板统计数据如下，请关注风险项。</p>
-          <div class="ai-insight">✨ AI 洞察：对比上周，组会 Action Items 落地率提升了 15%。</div>
+          <h1 class="welcome-title" id="dashboard-welcome">上午好。</h1>
+          <p class="welcome-subtitle">本周团队整体进度稳定，目前看板统计数据如下，请重点关注高风险项与临期任务。</p>
+          <div class="ai-insight">AI 洞察：对比上周，组会行动项落地率提升了 15%。</div>
         </header>
 
         <div class="dashboard-grid">
-          <!-- 左侧：我的待办任务 -->
-          <div class="card-base" style="align-self: start;">
+          <div class="card-base" style="align-self:start;">
             <div class="dash-section-title">
-              <h3>🚨 我的待办任务</h3>
-              <button class="apple-secondary-btn small-btn" onclick="document.querySelector('[data-target=\'view-workspace\']').click()">前往工作台</button>
+              <h3>我的待办任务</h3>
+              <button class="apple-secondary-btn small-btn" onclick="document.querySelector('[data-target=\'view-workspace\']')?.click()">前往工作台</button>
             </div>
-            <div class="urgent-tasks-list" id="dashboard-todo-list">
-              <!-- 动态注入待办 -->
-            </div>
+            <div class="urgent-tasks-list" id="dashboard-todo-list"></div>
             <div id="stats-panel" style="display:none;"></div>
           </div>
-          <!-- 右侧：实验室动态 或 任务详情 -->
-          <div class="card-base" style="position: relative; overflow: hidden; align-self: start;">
+
+          <div class="card-base" style="position:relative; overflow:hidden; align-self:start;">
             <div id="dashboard-activity-feed">
-              <h3 class="dash-section-title">🕒 实验室动态</h3>
+              <h3 class="dash-section-title">实验室动态</h3>
               <div class="activity-feed">
-                <div class="feed-item"><div class="feed-icon">✓</div><div class="feed-content"><p>系统已就绪，各项微服务已正常启动。</p><span>刚刚</span></div></div>
-                <div class="feed-item"><div class="feed-icon">💬</div><div class="feed-content"><p>切换到「智能解析舱」体验 Action Item 提取。</p><span>10 分钟前</span></div></div>
+                <div class="feed-item"><div class="feed-icon">✓</div><div class="feed-content"><p>系统已就绪，各项微服务均已正常启动。</p><span>刚刚</span></div></div>
+                <div class="feed-item"><div class="feed-icon">AI</div><div class="feed-content"><p>切换到智能解析舱，可快速完成会议纪要导入与行动项抽取。</p><span>10 分钟前</span></div></div>
               </div>
             </div>
-            <div id="dashboard-task-detail" style="display: none; flex-direction: column;">
-              <div class="dash-section-title" style="border-bottom: 1px solid var(--border-light); padding-bottom: 16px; margin-bottom: 0;">
-                <h3 style="display:flex; align-items:center; gap:8px;">
-                  <span style="font-size:20px;">📄 任务详情</span>
-                </h3>
-                <button class="apple-secondary-btn small-btn" onclick="closeDashboardTaskDetail()">← 返回动态</button>
+            <div id="dashboard-task-detail" style="display:none; flex-direction:column;">
+              <div class="dash-section-title" style="border-bottom:1px solid var(--border-light); padding-bottom:16px; margin-bottom:0;">
+                <h3 style="display:flex; align-items:center; gap:8px;">任务详情</h3>
+                <button class="apple-secondary-btn small-btn" onclick="closeDashboardTaskDetail()">返回动态</button>
               </div>
-              <div class="detail-content" id="dashboard-detail-content-body" style="padding: 24px 20px 0 20px;">
-                <!-- 详情动态注入 -->
-              </div>
+              <div class="detail-content" id="dashboard-detail-content-body" style="padding:24px 20px 0 20px;"></div>
             </div>
           </div>
         </div>
       </div>
     </main>
 
-    <!-- 视图 1：智能解析舱 -->
     <main id="view-inbox" class="view-container">
       <div class="inbox-layout">
         <div class="chat-panel">
@@ -247,6 +420,56 @@
           </div>
         </div>
 
+        <div class="workspace-tools">
+          <input id="task-search-input" class="apple-input workspace-search-input" type="text" placeholder="搜索任务标题、描述或负责人..." />
+          <select id="task-sort-input" class="apple-select workspace-sort-select">
+            <option value="createdAt:desc">按创建时间</option>
+            <option value="updatedAt:desc">按最近更新</option>
+            <option value="dueDate:asc">按截止时间</option>
+            <option value="priority:desc">按优先级</option>
+            <option value="title:asc">按标题</option>
+          </select>
+          <button id="toggle-task-create" class="apple-primary-btn small-btn">新建任务</button>
+        </div>
+
+        <section id="task-create-panel" class="card-base task-create-panel">
+          <div class="dash-section-title" style="margin-bottom: 18px;">
+            <h3>手动创建任务</h3>
+          </div>
+          <div class="task-create-grid">
+            <label class="task-create-field task-create-field-wide">
+              <span>任务标题</span>
+              <input id="task-create-title" class="apple-input" type="text" placeholder="例如：补齐周报数据汇总" />
+            </label>
+            <label class="task-create-field task-create-field-wide">
+              <span>任务描述</span>
+              <textarea id="task-create-description" class="apple-textarea" rows="3" placeholder="补充任务背景、交付内容和备注..."></textarea>
+            </label>
+            <label class="task-create-field">
+              <span>负责人</span>
+              <select id="task-create-owner" class="apple-select">
+                <option value="">待指派</option>
+              </select>
+            </label>
+            <label class="task-create-field">
+              <span>截止日期</span>
+              <input id="task-create-due-date" class="apple-input" type="date" />
+            </label>
+            <label class="task-create-field">
+              <span>优先级</span>
+              <select id="task-create-priority" class="apple-select">
+                <option value="medium">中优先级</option>
+                <option value="high">高优先级</option>
+                <option value="low">低优先级</option>
+              </select>
+            </label>
+            <div class="task-create-actions">
+              <button id="create-task" class="apple-primary-btn">创建任务</button>
+            </div>
+          </div>
+          <div id="task-create-feedback" class="import-feedback mt-10 tone-neutral">填写后可直接落库到工作台。</div>
+        </section>
+
         <div class="board-columns" id="board-columns">
           <!-- 任务列动态生成 -->
         </div>
@@ -292,13 +515,13 @@
             </div>
             <div style="display:flex;gap:8px;margin-bottom:12px;">
               <input id="member-name-input" class="apple-input" type="text" placeholder="姓名" />
-              <input id="member-grade-input" class="apple-input" type="text" placeholder="年级" />
+              <input id="member-student-id-input" class="apple-input" type="text" placeholder="年级" />
               <select id="member-degree-type-input" class="apple-select"><option value="master">Master</option><option value="phd">PhD</option></select>
             </div>
-            <button id="create-member" class="apple-primary-btn" style="width:100%;">添加成员</button>
+            <button id="create-member" class="apple-primary-btn" style="width:100%;">添加成员并生成密码</button>
             <div id="member-feedback" class="mt-10" style="font-size:13px; color:var(--danger)"></div>
             <div id="member-search-container" style="margin-top: 20px; display: none;">
-              <input id="member-search-input" class="apple-input" type="text" placeholder="🔍 搜索成员姓名或年级..." style="background: var(--bg-body);" />
+              <input id="member-search-input" class="apple-input" type="text" placeholder="搜索成员姓名或年级..." style="background: var(--bg-body);" />
             </div>
             <div id="member-list" class="activity-feed mt-20 empty-state" style="margin-top:12px;">加载中...</div>
          </article>

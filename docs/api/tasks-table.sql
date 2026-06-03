@@ -37,14 +37,15 @@ END;
 CREATE TABLE IF NOT EXISTS members (
   id TEXT NOT NULL PRIMARY KEY,
   name TEXT NOT NULL CHECK (length(name) <= 50),
-  grade TEXT NOT NULL CHECK (length(grade) <= 20),
+  student_id TEXT NOT NULL CHECK (length(student_id) <= 32),
+  password TEXT NOT NULL CHECK (length(password) > 0),
   degree_type TEXT NOT NULL CHECK (degree_type IN ('master', 'phd')),
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX IF NOT EXISTS idx_members_name ON members (name);
-CREATE INDEX IF NOT EXISTS idx_members_grade ON members (grade);
+CREATE INDEX IF NOT EXISTS idx_members_student_id ON members (student_id);
 CREATE INDEX IF NOT EXISTS idx_members_degree_type ON members (degree_type);
 
 CREATE TRIGGER IF NOT EXISTS trg_members_updated_at

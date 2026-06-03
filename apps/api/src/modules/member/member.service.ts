@@ -1,22 +1,30 @@
-import type { CreateMemberInput, Member, UpdateMemberInput } from '../../../../../packages/shared/src';
+import { randomInt } from 'node:crypto';
+
+import type { CreateMemberInput, CreatedMember, Member, UpdateMemberInput } from '../../../../../packages/shared/src';
 import { isMemberDegreeType } from '../../../../../packages/shared/src';
 import type { DatabaseClient, DatabaseParameter } from '../../db/database-client';
-import { NotFoundError, ValidationError } from '../../errors';
+import { ConflictError, NotFoundError, ValidationError } from '../../errors';
+import { hashPassword } from '../auth/password';
 
 type MemberRow = {
   id: string;
   name: string;
-  grade: string;
+  student_id: string;
+  password: string;
   degree_type: Member['degreeType'];
   created_at: string;
   updated_at: string;
 };
 
+function generateSixDigitPassword(): string {
+  return String(randomInt(100000, 1000000));
+}
+
 function mapMemberRow(row: MemberRow): Member {
   return {
     id: row.id,
     name: row.name,
-    grade: row.grade,
+    studentId: row.student_id,
     degreeType: row.degree_type,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -38,13 +46,55 @@ function normalizeOptionalText(value: string | undefined): string | undefined {
 export class MemberService {
   constructor(private readonly db: DatabaseClient) {}
 
+  async countMembers(): Promise<number> {
+    const row = await this.db.get<{ total: number }>('SELECT COUNT(*) AS total FROM members');
+    return row?.total ?? 0;
+  }
+
+  private async getMemberRowByName(memberName: string): Promise<MemberRow | undefined> {
+    return this.db.get<MemberRow>(
+      `
+        SELECT
+          id,
+          name,
+          student_id,
+          password,
+          degree_type,
+          created_at,
+          updated_at
+        FROM members
+        WHERE name = ?
+      `,
+      [memberName],
+    );
+  }
+
+  private async getMemberRowByStudentId(studentId: string): Promise<MemberRow | undefined> {
+    return this.db.get<MemberRow>(
+      `
+        SELECT
+          id,
+          name,
+          student_id,
+          password,
+          degree_type,
+          created_at,
+          updated_at
+        FROM members
+        WHERE student_id = ?
+      `,
+      [studentId],
+    );
+  }
+
   private async getMemberRowById(memberId: string): Promise<MemberRow | undefined> {
     return this.db.get<MemberRow>(
       `
         SELECT
           id,
           name,
-          grade,
+          student_id,
+          password,
           degree_type,
           created_at,
           updated_at
@@ -61,7 +111,8 @@ export class MemberService {
         SELECT
           id,
           name,
-          grade,
+          student_id,
+          password,
           degree_type,
           created_at,
           updated_at
@@ -83,46 +134,84 @@ export class MemberService {
     return mapMemberRow(row);
   }
 
-  async createMember(input: CreateMemberInput): Promise<Member> {
+  async createMember(input: CreateMemberInput): Promise<CreatedMember> {
     const name = input.name?.trim();
-    const grade = input.grade?.trim();
+    const studentId = input.studentId?.trim();
 
     if (!name) {
       throw new ValidationError('Member name is required.');
     }
 
-    if (!grade) {
-      throw new ValidationError('Member grade is required.');
+    if (!studentId) {
+      throw new ValidationError('Member studentId is required.');
     }
 
     if (!isMemberDegreeType(input.degreeType)) {
       throw new ValidationError('Member degreeType must be master or phd.');
     }
 
+    const existingMember = await this.getMemberRowByName(name);
+    if (existingMember) {
+      throw new ConflictError(`Member ${name} already exists.`);
+    }
+
+    const existingStudentIdMember = await this.getMemberRowByStudentId(studentId);
+    if (existingStudentIdMember) {
+      throw new ConflictError(`Student ID ${studentId} already exists.`);
+    }
+
+    const createdAt = new Date().toISOString();
+    const updatedAt = createdAt;
+
+    const initialPassword = generateSixDigitPassword();
     const member: Member = {
       id: createMemberId(),
       name,
-      grade,
+      studentId,
       degreeType: input.degreeType,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      createdAt,
+      updatedAt,
     };
 
-    await this.db.run(
-      `
-        INSERT INTO members (
-          id,
-          name,
-          grade,
-          degree_type,
-          created_at,
-          updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?)
-      `,
-      [member.id, member.name, member.grade, member.degreeType, member.createdAt, member.updatedAt],
-    );
+    try {
+      await this.db.run(
+        `
+          INSERT INTO members (
+            id,
+            name,
+            student_id,
+            password,
+            degree_type,
+            created_at,
+            updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        `,
+        [
+          member.id,
+          member.name,
+          member.studentId,
+          hashPassword(initialPassword),
+          member.degreeType,
+          member.createdAt,
+          member.updatedAt,
+        ],
+      );
+    } catch (error) {
+      if (error instanceof Error && /UNIQUE constraint failed: members\.name/i.test(error.message)) {
+        throw new ConflictError(`Member ${name} already exists.`);
+      }
 
-    return member;
+      if (error instanceof Error && /UNIQUE constraint failed: members\.student_id/i.test(error.message)) {
+        throw new ConflictError(`Student ID ${studentId} already exists.`);
+      }
+
+      throw error;
+    }
+
+    return {
+      ...member,
+      initialPassword,
+    };
   }
 
   async updateMember(memberId: string, input: UpdateMemberInput): Promise<Member> {
@@ -137,43 +226,69 @@ export class MemberService {
     }
 
     const nextName = normalizeOptionalText(input.name);
-    const nextGrade = normalizeOptionalText(input.grade);
+    const nextStudentId = normalizeOptionalText(input.studentId);
 
     if (nextName !== undefined && nextName.length === 0) {
       throw new ValidationError('Member name cannot be empty.');
     }
 
-    if (nextGrade !== undefined && nextGrade.length === 0) {
-      throw new ValidationError('Member grade cannot be empty.');
+    if (nextStudentId !== undefined && nextStudentId.length === 0) {
+      throw new ValidationError('Member studentId cannot be empty.');
+    }
+
+    if (nextName !== undefined) {
+      const existingMember = await this.getMemberRowByName(nextName);
+      if (existingMember && existingMember.id !== memberId) {
+        throw new ConflictError(`Member ${nextName} already exists.`);
+      }
+    }
+
+    if (nextStudentId !== undefined) {
+      const existingMember = await this.getMemberRowByStudentId(nextStudentId);
+      if (existingMember && existingMember.id !== memberId) {
+        throw new ConflictError(`Student ID ${nextStudentId} already exists.`);
+      }
     }
 
     const existingMember = mapMemberRow(existingRow);
     const updatedMember: Member = {
       ...existingMember,
       name: nextName ?? existingMember.name,
-      grade: nextGrade ?? existingMember.grade,
+      studentId: nextStudentId ?? existingMember.studentId,
       degreeType: input.degreeType ?? existingMember.degreeType,
       updatedAt: new Date().toISOString(),
     };
 
-    await this.db.run(
-      `
-        UPDATE members
-        SET
-          name = ?,
-          grade = ?,
-          degree_type = ?,
-          updated_at = ?
-        WHERE id = ?
-      `,
-      [
-        updatedMember.name,
-        updatedMember.grade,
-        updatedMember.degreeType,
-        updatedMember.updatedAt,
-        memberId,
-      ],
-    );
+    try {
+      await this.db.run(
+        `
+          UPDATE members
+          SET
+            name = ?,
+            student_id = ?,
+            degree_type = ?,
+            updated_at = ?
+          WHERE id = ?
+        `,
+        [
+          updatedMember.name,
+          updatedMember.studentId,
+          updatedMember.degreeType,
+          updatedMember.updatedAt,
+          memberId,
+        ],
+      );
+    } catch (error) {
+      if (error instanceof Error && /UNIQUE constraint failed: members\.name/i.test(error.message)) {
+        throw new ConflictError(`Member ${updatedMember.name} already exists.`);
+      }
+
+      if (error instanceof Error && /UNIQUE constraint failed: members\.student_id/i.test(error.message)) {
+        throw new ConflictError(`Student ID ${updatedMember.studentId} already exists.`);
+      }
+
+      throw error;
+    }
 
     await this.db.run(
       `
@@ -215,7 +330,8 @@ export class MemberService {
         SELECT
           id,
           name,
-          grade,
+          student_id,
+          password,
           degree_type,
           created_at,
           updated_at

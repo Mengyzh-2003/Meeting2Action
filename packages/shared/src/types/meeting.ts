@@ -11,7 +11,7 @@ export interface Meeting {
 export interface MemberSummary {
   id: string;
   name: string;
-  grade: string;
+  studentId: string;
   degreeType: 'master' | 'phd';
 }
 

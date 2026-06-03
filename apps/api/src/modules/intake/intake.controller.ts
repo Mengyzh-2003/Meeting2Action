@@ -28,7 +28,10 @@ export class IntakeController {
     request: RequestLike<ParseMeetingInput>,
     response: ResponseLike,
   ): Promise<void> => {
-    const result = await this.intakeService.parseMeetingContent(request.body);
+    const result = await this.intakeService.parseMeetingContent({
+      ...request.body,
+      operatorName: request.auth?.member.name ?? request.body.operatorName,
+    });
     response.status(201).json(result);
   };
 
@@ -36,7 +39,10 @@ export class IntakeController {
     request: RequestLike<ImportMeetingIntakeInput>,
     response: ResponseLike,
   ): Promise<void> => {
-    const result = await this.intakeService.importToBoard(request.params.id, request.body);
+    const result = await this.intakeService.importToBoard(request.params.id, {
+      ...request.body,
+      operatorName: request.auth?.member.name ?? request.body.operatorName,
+    });
     response.status(201).json(result);
   };
 

@@ -27,6 +27,14 @@ if not exist "node_modules" (
     popd
     exit /b 1
   )
+) else if not exist "node_modules\@anthropic-ai\sdk" (
+  echo [STEP 1/3] Dependencies look incomplete, repairing install...
+  call npm install
+  if errorlevel 1 (
+    echo [ERROR] npm install failed.
+    popd
+    exit /b 1
+  )
 ) else (
   echo [STEP 1/3] node_modules already exists, skip install.
 )

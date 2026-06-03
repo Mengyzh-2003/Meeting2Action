@@ -111,13 +111,19 @@ interface ParseMeetingResponse {
   payload: ActionItemsPayload;
 }
 
-interface Member {
+interface PublicMember {
   id: string;
   name: string;
-  grade: string;
+  studentId: string;
   degreeType: 'master' | 'phd';
   createdAt: string;
   updatedAt: string;
+}
+
+type Member = PublicMember;
+
+interface CreatedMember extends PublicMember {
+  initialPassword: string;
 }
 
 interface MeetingParticipant {
@@ -130,7 +136,7 @@ interface MeetingParticipant {
 interface MemberSummary {
   id: string;
   name: string;
-  grade: string;
+  studentId: string;
   degreeType: 'master' | 'phd';
 }
 
@@ -149,7 +155,34 @@ interface ListResponse<T> {
   count: number;
 }
 
+interface MemberStatusResponse {
+  hasMembers: boolean;
+  count: number;
+}
+
+interface TaskListResponse extends ListResponse<Task> {
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+interface AuthSessionResponse {
+  token: string;
+  member: PublicMember;
+  createdAt: string;
+  expiresAt: string;
+}
+
+type TaskSortField = 'createdAt' | 'updatedAt' | 'dueDate' | 'title' | 'priority' | 'status';
+
+interface TaskQueryState {
+  keyword: string;
+  sortBy: TaskSortField;
+  sortOrder: 'asc' | 'desc';
+}
+
 const API_BASE_URL = 'http://127.0.0.1:3001';
+const AUTH_STORAGE_KEY = 'meeting2action.authToken';
 const SAMPLE_MEETING_NOTE = `会议主题：多模态目标检测项目周例会
 
 导师：下周之前先把 Transformer 基线和 ResNet 基线的对比实验跑完，结果整理成表格。
@@ -162,6 +195,17 @@ const statsPanel = document.querySelector<HTMLDivElement>('#stats-panel');
 const boardColumns = document.querySelector<HTMLDivElement>('#board-columns');
 const taskDetail = document.querySelector<HTMLDivElement>('#task-detail');
 const refreshButton = document.querySelector<HTMLButtonElement>('#refresh-board');
+const taskSearchInput = document.querySelector<HTMLInputElement>('#task-search-input');
+const taskSortInput = document.querySelector<HTMLSelectElement>('#task-sort-input');
+const toggleTaskCreateButton = document.querySelector<HTMLButtonElement>('#toggle-task-create');
+const taskCreatePanel = document.querySelector<HTMLElement>('#task-create-panel');
+const taskCreateTitleInput = document.querySelector<HTMLInputElement>('#task-create-title');
+const taskCreateDescriptionInput = document.querySelector<HTMLTextAreaElement>('#task-create-description');
+const taskCreateOwnerInput = document.querySelector<HTMLSelectElement>('#task-create-owner');
+const taskCreateDueDateInput = document.querySelector<HTMLInputElement>('#task-create-due-date');
+const taskCreatePriorityInput = document.querySelector<HTMLSelectElement>('#task-create-priority');
+const createTaskButton = document.querySelector<HTMLButtonElement>('#create-task');
+const taskCreateFeedback = document.querySelector<HTMLDivElement>('#task-create-feedback');
 const loadSampleButton = document.querySelector<HTMLButtonElement>('#load-sample');
 const previewImportButton = document.querySelector<HTMLButtonElement>('#preview-import');
 const submitImportButton = document.querySelector<HTMLButtonElement>('#submit-import');
@@ -192,7 +236,7 @@ const riskFilterName = document.querySelector<HTMLSpanElement>('#risk-filter-nam
 const resetFiltersButton = document.querySelector<HTMLButtonElement>('#reset-filters');
 const refreshMembersButton = document.querySelector<HTMLButtonElement>('#refresh-members');
 const memberNameInput = document.querySelector<HTMLInputElement>('#member-name-input');
-const memberGradeInput = document.querySelector<HTMLInputElement>('#member-grade-input');
+const memberStudentIdInput = document.querySelector<HTMLInputElement>('#member-student-id-input');
 const memberDegreeTypeInput = document.querySelector<HTMLSelectElement>('#member-degree-type-input');
 const createMemberButton = document.querySelector<HTMLButtonElement>('#create-member');
 const memberFeedback = document.querySelector<HTMLDivElement>('#member-feedback');
@@ -218,6 +262,22 @@ const dashboardTodoList = document.querySelector<HTMLDivElement>('#dashboard-tod
 const dashboardActivityFeed = document.querySelector<HTMLDivElement>('#dashboard-activity-feed');
 const dashboardTaskDetail = document.querySelector<HTMLDivElement>('#dashboard-task-detail');
 const dashboardDetailContentBody = document.querySelector<HTMLDivElement>('#dashboard-detail-content-body');
+const authGate = document.querySelector<HTMLDivElement>('#auth-gate');
+const authModeLabel = document.querySelector<HTMLSpanElement>('#auth-mode-label');
+const authTitle = document.querySelector<HTMLHeadingElement>('#auth-title');
+const authFeedback = document.querySelector<HTMLDivElement>('#auth-feedback');
+const authLoginForm = document.querySelector<HTMLFormElement>('#auth-login-form');
+const authStudentIdInput = document.querySelector<HTMLInputElement>('#auth-student-id-input');
+const authPasswordInput = document.querySelector<HTMLInputElement>('#auth-password-input');
+const authPasswordToggle = document.querySelector<HTMLButtonElement>('#auth-password-toggle');
+const authLoginButton = document.querySelector<HTMLButtonElement>('#auth-login-button');
+const authEmptyState = document.querySelector<HTMLDivElement>('#auth-empty-state');
+const firstMemberForm = document.querySelector<HTMLFormElement>('#first-member-form');
+const firstMemberNameInput = document.querySelector<HTMLInputElement>('#first-member-name-input');
+const firstMemberStudentIdInput = document.querySelector<HTMLInputElement>('#first-member-student-id-input');
+const firstMemberDegreeTypeInput = document.querySelector<HTMLSelectElement>('#first-member-degree-type-input');
+const createFirstMemberButton = document.querySelector<HTMLButtonElement>('#create-first-member-button');
+const firstMemberFeedback = document.querySelector<HTMLDivElement>('#first-member-feedback');
 
 let selectedTaskId: string | null = null;
 let selectedDashboardTaskId: string | null = null;
@@ -227,14 +287,23 @@ let draftParserEngine = '';
 let currentParsedIntakeId: string | null = null;
 let latestBoardData: BoardResponse | null = null;
 let latestBoardStats: BoardStats | null = null;
+let latestWorkspaceBoardData: BoardResponse | null = null;
 let latestMembers: Member[] = [];
 let latestMeetings: Meeting[] = [];
 let latestIntakes: MeetingIntake[] = [];
 let currentUserMemberId: string | null = null;
+let authToken: string | null = null;
+let hasInitializedMembers = false;
+let taskSearchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 const boardFilters: BoardFilters = {
   status: 'all',
   ownerName: 'all',
   risk: 'all',
+};
+const taskQueryState: TaskQueryState = {
+  keyword: '',
+  sortBy: 'createdAt',
+  sortOrder: 'desc',
 };
 
 function assertElement<T>(element: T | null, message: string): T {
@@ -249,6 +318,17 @@ const safeStatsPanel = assertElement(statsPanel, 'stats panel not found');
 const safeBoardColumns = assertElement(boardColumns, 'board columns not found');
 const safeTaskDetail = assertElement(taskDetail, 'task detail not found');
 const safeRefreshButton = assertElement(refreshButton, 'refresh button not found');
+const safeTaskSearchInput = assertElement(taskSearchInput, 'task search input not found');
+const safeTaskSortInput = assertElement(taskSortInput, 'task sort input not found');
+const safeToggleTaskCreateButton = assertElement(toggleTaskCreateButton, 'toggle task create button not found');
+const safeTaskCreatePanel = assertElement(taskCreatePanel, 'task create panel not found');
+const safeTaskCreateTitleInput = assertElement(taskCreateTitleInput, 'task create title input not found');
+const safeTaskCreateDescriptionInput = assertElement(taskCreateDescriptionInput, 'task create description input not found');
+const safeTaskCreateOwnerInput = assertElement(taskCreateOwnerInput, 'task create owner input not found');
+const safeTaskCreateDueDateInput = assertElement(taskCreateDueDateInput, 'task create due date input not found');
+const safeTaskCreatePriorityInput = assertElement(taskCreatePriorityInput, 'task create priority input not found');
+const safeCreateTaskButton = assertElement(createTaskButton, 'create task button not found');
+const safeTaskCreateFeedback = assertElement(taskCreateFeedback, 'task create feedback not found');
 const safeLoadSampleButton = assertElement(loadSampleButton, 'load sample button not found');
 const safePreviewImportButton = assertElement(previewImportButton, 'preview import button not found');
 const safeSubmitImportButton = assertElement(submitImportButton, 'submit import button not found');
@@ -278,7 +358,7 @@ const safeRiskFilterName = assertElement(riskFilterName, 'risk name');
 const safeResetFiltersButton = assertElement(resetFiltersButton, 'reset filters button not found');
 const safeRefreshMembersButton = assertElement(refreshMembersButton, 'refresh members button not found');
 const safeMemberNameInput = assertElement(memberNameInput, 'member name input not found');
-const safeMemberGradeInput = assertElement(memberGradeInput, 'member grade input not found');
+const safeMemberStudentIdInput = assertElement(memberStudentIdInput, 'member student id input not found');
 const safeMemberDegreeTypeInput = assertElement(memberDegreeTypeInput, 'member degree type input not found');
 const safeCreateMemberButton = assertElement(createMemberButton, 'create member button not found');
 const safeMemberFeedback = assertElement(memberFeedback, 'member feedback not found');
@@ -304,9 +384,25 @@ const safeDashboardTodoList = assertElement(dashboardTodoList, 'dashboard todo l
 const safeDashboardActivityFeed = assertElement(dashboardActivityFeed, 'dashboard activity feed not found');
 const safeDashboardTaskDetail = assertElement(dashboardTaskDetail, 'dashboard task detail not found');
 const safeDashboardDetailContentBody = assertElement(dashboardDetailContentBody, 'dashboard detail content body not found');
+const safeAuthGate = assertElement(authGate, 'auth gate not found');
+const safeAuthModeLabel = assertElement(authModeLabel, 'auth mode label not found');
+const safeAuthTitle = assertElement(authTitle, 'auth title not found');
+const safeAuthFeedback = assertElement(authFeedback, 'auth feedback not found');
+const safeAuthLoginForm = assertElement(authLoginForm, 'auth login form not found');
+const safeAuthStudentIdInput = assertElement(authStudentIdInput, 'auth student id input not found');
+const safeAuthPasswordInput = assertElement(authPasswordInput, 'auth password input not found');
+const safeAuthPasswordToggle = assertElement(authPasswordToggle, 'auth password toggle not found');
+const safeAuthLoginButton = assertElement(authLoginButton, 'auth login button not found');
+const safeAuthEmptyState = assertElement(authEmptyState, 'auth empty state not found');
+const safeFirstMemberForm = assertElement(firstMemberForm, 'first member form not found');
+const safeFirstMemberNameInput = assertElement(firstMemberNameInput, 'first member name input not found');
+const safeFirstMemberStudentIdInput = assertElement(firstMemberStudentIdInput, 'first member student id input not found');
+const safeFirstMemberDegreeTypeInput = assertElement(firstMemberDegreeTypeInput, 'first member degree input not found');
+const safeCreateFirstMemberButton = assertElement(createFirstMemberButton, 'create first member button not found');
+const safeFirstMemberFeedback = assertElement(firstMemberFeedback, 'first member feedback not found');
 
-function escapeHtml(value: string): string {
-  return value
+function escapeHtml(value: unknown): string {
+  return String(value ?? '')
     .replaceAll('&', '&amp;')
     .replaceAll('<', '&lt;')
     .replaceAll('>', '&gt;')
@@ -370,14 +466,157 @@ function taskRiskLabel(task: Task): string | null {
   return null;
 }
 
+function buildBoardStatsFromTasks(tasks: Task[]): BoardStats {
+  return {
+    total: tasks.length,
+    todo: tasks.filter((task) => task.status === 'todo').length,
+    doing: tasks.filter((task) => task.status === 'doing').length,
+    done: tasks.filter((task) => task.status === 'done').length,
+    overdue: tasks.filter(isOverdue).length,
+    dueSoon: tasks.filter((task) => isDueSoon(task) && !isOverdue(task)).length,
+  };
+}
+
+function buildBoardFromTasks(tasks: Task[]): BoardResponse {
+  return {
+    columns: [
+      { status: 'todo', title: 'To Do', items: tasks.filter((task) => task.status === 'todo') },
+      { status: 'doing', title: 'Doing', items: tasks.filter((task) => task.status === 'doing') },
+      { status: 'done', title: 'Done', items: tasks.filter((task) => task.status === 'done') },
+    ],
+    stats: buildBoardStatsFromTasks(tasks),
+  };
+}
+
+function buildTaskQueryPath(): string {
+  const params = new URLSearchParams();
+
+  if (taskQueryState.keyword.trim()) {
+    params.set('keyword', taskQueryState.keyword.trim());
+  }
+
+  params.set('sortBy', taskQueryState.sortBy);
+  params.set('sortOrder', taskQueryState.sortOrder);
+  params.set('page', '1');
+  params.set('pageSize', '100');
+
+  return `/api/tasks?${params.toString()}`;
+}
+
 async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${API_BASE_URL}${path}`, init);
+  const headers = new Headers(init?.headers ?? {});
+
+  if (authToken) {
+    headers.set('Authorization', `Bearer ${authToken}`);
+  }
+
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    ...init,
+    headers,
+  });
 
   if (!response.ok) {
-    throw new Error(`Request failed: ${response.status}`);
+    let message = `Request failed: ${response.status}`;
+
+    try {
+      const payload = await response.json() as { message?: string };
+      if (payload.message) {
+        message = payload.message;
+      }
+    } catch {
+      // Ignore non-JSON error responses.
+    }
+
+    if (response.status === 401) {
+      clearAuthSession();
+      renderTeamSwitcher();
+      renderDashboardTodos();
+      renderAuthGate();
+    }
+
+    throw new Error(message);
   }
 
   return response.json() as Promise<T>;
+}
+
+function saveAuthToken(token: string): void {
+  authToken = token;
+  window.localStorage.setItem(AUTH_STORAGE_KEY, token);
+}
+
+function clearAuthSession(): void {
+  authToken = null;
+  currentUserMemberId = null;
+  window.localStorage.removeItem(AUTH_STORAGE_KEY);
+}
+
+function returnToLoginGate(): void {
+  document.querySelectorAll<HTMLElement>('.nav-tab').forEach((tab) => {
+    tab.classList.toggle('active', tab.dataset.target === 'view-dashboard');
+  });
+  document.querySelectorAll<HTMLElement>('.view-container').forEach((view) => {
+    view.classList.toggle('active', view.id === 'view-dashboard');
+  });
+  document.querySelectorAll<HTMLElement>('.user-dropdown').forEach((dropdown) => {
+    dropdown.classList.remove('open');
+  });
+  document.querySelectorAll<HTMLElement>('.current-user-badge').forEach((badge) => {
+    badge.classList.remove('open');
+  });
+  document.querySelectorAll<HTMLElement>('.apple-drawer').forEach((drawer) => {
+    drawer.classList.remove('open');
+  });
+
+  safeAuthPasswordInput.value = '';
+  renderAuthGate();
+  window.setTimeout(() => safeAuthStudentIdInput.focus(), 0);
+}
+
+async function restoreAuthSession(): Promise<void> {
+  const storedToken = window.localStorage.getItem(AUTH_STORAGE_KEY);
+
+  if (!storedToken) {
+    clearAuthSession();
+    return;
+  }
+
+  authToken = storedToken;
+
+  try {
+    const session = await fetchJson<AuthSessionResponse>('/api/users/me');
+    currentUserMemberId = session.member.id;
+  } catch {
+    clearAuthSession();
+  }
+}
+
+async function loginWithCredentials(username: string, password: string): Promise<void> {
+  const session = await fetchJson<AuthSessionResponse>('/api/auth/login', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ username, password }),
+  });
+
+  saveAuthToken(session.token);
+  currentUserMemberId = session.member.id;
+}
+
+async function logoutCurrentUser(): Promise<void> {
+  if (!authToken) {
+    clearAuthSession();
+    return;
+  }
+
+  try {
+    await fetchJson<{ loggedOut: true }>('/api/auth/logout', {
+      method: 'POST',
+    });
+  } finally {
+    clearAuthSession();
+  }
 }
 
 function normalizeActionItem(rawItem: Partial<ActionItem> & { id?: string; title?: string; description?: string; sourceText?: string }): ActionItem {
@@ -889,9 +1128,67 @@ function getCurrentUserName(): string {
   return member?.name ?? (safeOperatorNameInput.value.trim() || '');
 }
 
+function setAuthFeedback(message: string, tone: 'success' | 'error' | 'neutral' = 'neutral'): void {
+  const nextMessage = message.trim();
+  safeAuthFeedback.textContent = nextMessage;
+  safeAuthFeedback.className = `auth-feedback tone-${tone}${nextMessage ? '' : ' hidden'}`;
+}
+
+function setFirstMemberFeedback(message: string, tone: 'success' | 'error' | 'neutral' = 'neutral'): void {
+  const nextMessage = message.trim();
+  safeFirstMemberFeedback.textContent = nextMessage;
+  safeFirstMemberFeedback.className = `auth-feedback tone-${tone}${nextMessage ? '' : ' hidden'}`;
+}
+
+function setAuthPasswordVisible(visible: boolean): void {
+  safeAuthPasswordInput.type = visible ? 'text' : 'password';
+  safeAuthPasswordToggle.textContent = visible ? '隐藏' : '显示';
+  safeAuthPasswordToggle.setAttribute('aria-label', visible ? '隐藏密码' : '显示密码');
+}
+
+function renderAuthGate(): void {
+  const currentMember = currentUserMemberId
+    ? latestMembers.find((member) => member.id === currentUserMemberId) ?? null
+    : null;
+  const hasMembers = hasInitializedMembers || latestMembers.length > 0;
+  const isAuthenticated = Boolean(currentMember);
+
+  document.body.classList.toggle('auth-locked', !isAuthenticated);
+  safeAuthGate.classList.toggle('hidden', isAuthenticated);
+
+  if (!hasMembers) {
+    safeAuthModeLabel.textContent = '首次初始化';
+    safeAuthTitle.textContent = '创建首位成员';
+    safeAuthLoginForm.classList.add('hidden');
+    safeAuthEmptyState.classList.remove('hidden');
+    safeFirstMemberForm.classList.remove('hidden');
+    setAuthFeedback('');
+    setAuthPasswordVisible(false);
+    return;
+  }
+
+  safeAuthModeLabel.textContent = '账号登录';
+  safeAuthTitle.textContent = '欢迎进入内部工作区';
+  safeAuthLoginForm.classList.remove('hidden');
+  safeAuthEmptyState.classList.add('hidden');
+  safeFirstMemberForm.classList.add('hidden');
+  setFirstMemberFeedback('');
+
+  if (!isAuthenticated) {
+    setAuthFeedback('');
+    setAuthPasswordVisible(false);
+  }
+}
+
 function renderDashboardTodos(): void {
   const allTasks = latestBoardData ? latestBoardData.columns.flatMap((c) => c.items) : [];
   const userName = getCurrentUserName();
+
+  if (!currentUserMemberId) {
+    safeDashboardTodoList.innerHTML = '<div class="empty-state" style="padding: 24px;">请先完成登录，再查看你的待办任务。</div>';
+    return;
+  }
+
   const myTodos = allTasks.filter((t) => {
     if (t.status === 'done') {
       return false;
@@ -1033,6 +1330,11 @@ function setMeetingFeedback(message: string, tone: 'neutral' | 'success' | 'erro
   }
 }
 
+function setTaskCreateFeedback(message: string, tone: 'neutral' | 'success' | 'error' = 'neutral'): void {
+  safeTaskCreateFeedback.className = `import-feedback mt-10 tone-${tone}`;
+  safeTaskCreateFeedback.textContent = message;
+}
+
 function degreeTypeLabel(value: Member['degreeType']): string {
   return value === 'phd' ? '博士' : '硕士';
 }
@@ -1048,8 +1350,8 @@ function getGreetingByHour(): string {
   return '晚上好';
 }
 
-function memberGradeLabel(member: Pick<Member, 'degreeType' | 'grade'>): string {
-  return `${degreeTypeLabel(member.degreeType)}${member.grade}`;
+function memberAccountLabel(member: Pick<PublicMember, 'degreeType' | 'studentId'>): string {
+  return `${degreeTypeLabel(member.degreeType)} · 年级 ${member.studentId}`;
 }
 
 function avatarColorByMemberId(memberId: string): string {
@@ -1058,69 +1360,77 @@ function avatarColorByMemberId(memberId: string): string {
   return palette[hash % palette.length];
 }
 
-function applyCurrentUser(member: Member): void {
-  const gradeLabel = memberGradeLabel(member);
+function applyCurrentUser(member: PublicMember): void {
+  const accountLabel = memberAccountLabel(member);
   safeNavUserAvatar.textContent = member.name.slice(0, 1);
   safeNavUserAvatar.style.background = avatarColorByMemberId(member.id);
   safeNavUserAvatar.style.color = '#FFFFFF';
-  safeNavUserName.textContent = `${member.name}（${gradeLabel}）`;
+  safeNavUserName.textContent = `${member.name}（${accountLabel}）`;
   safeDashboardWelcome.textContent = `${getGreetingByHour()}，${member.name}。`;
   safeOperatorNameInput.value = member.name;
+}
+
+function applyLoggedOutUser(): void {
+  safeNavUserAvatar.textContent = '未';
+  safeNavUserAvatar.style.background = '#86868B';
+  safeNavUserAvatar.style.color = '#FFFFFF';
+  safeNavUserName.textContent = '请先登录';
+  safeDashboardWelcome.textContent = `${getGreetingByHour()}。`;
+  safeOperatorNameInput.value = '';
 }
 
 function renderTeamSwitcher(): void {
   if (latestMembers.length === 0) {
     safeDropdownUserList.innerHTML =
-      '<div class="dropdown-header" style="margin: 0; border: none; text-transform: none; letter-spacing: 0;">暂无成员，请先在资源中心添加成员</div>';
+      '<div class="dropdown-header" style="margin: 0; border: none; text-transform: none; letter-spacing: 0;">等待创建首位成员</div>';
     safeNavUserAvatar.textContent = '?';
     safeNavUserAvatar.style.background = '#86868B';
-    safeNavUserName.textContent = '暂无成员';
+    safeNavUserName.textContent = '未初始化';
     safeDashboardWelcome.textContent = `${getGreetingByHour()}。`;
     safeOperatorNameInput.value = '';
     currentUserMemberId = null;
     return;
   }
 
-  const currentMember = latestMembers.find((member) => member.id === currentUserMemberId) ?? latestMembers[0];
-  currentUserMemberId = currentMember.id;
-  applyCurrentUser(currentMember);
+  const currentMember = currentUserMemberId
+    ? latestMembers.find((member) => member.id === currentUserMemberId) ?? null
+    : null;
 
-  safeDropdownUserList.innerHTML = latestMembers
-    .map((member) => {
-      const isActive = member.id === currentUserMemberId;
-      const color = avatarColorByMemberId(member.id);
-      return `
-        <div class="dropdown-item ${isActive ? 'active' : ''}" data-user-member-id="${escapeHtml(member.id)}">
-          <div class="user-avatar" style="background:${color};color:#FFFFFF;">${escapeHtml(member.name.slice(0, 1))}</div>
-          ${escapeHtml(member.name)}（${escapeHtml(memberGradeLabel(member))}）
-        </div>
-      `;
-    })
-    .join('');
+  if (currentMember) {
+    applyCurrentUser(currentMember);
+  } else {
+    currentUserMemberId = null;
+    applyLoggedOutUser();
+  }
+
+  if (!currentMember) {
+    safeDropdownUserList.innerHTML = '<div class="dropdown-header" style="margin: 0; border: none; text-transform: none; letter-spacing: 0;">请先在登录页完成登录</div>';
+    return;
+  }
+
+  const color = avatarColorByMemberId(currentMember.id);
+  safeDropdownUserList.innerHTML = `
+    <div class="dropdown-item active">
+      <div class="user-avatar" style="background:${color};color:#FFFFFF;">${escapeHtml(currentMember.name.slice(0, 1))}</div>
+      <div style="display:flex; flex-direction:column; gap:2px;">
+        <span>${escapeHtml(currentMember.name)}</span>
+        <span style="font-size:12px; opacity:0.75;">年级 ${escapeHtml(currentMember.studentId)}</span>
+      </div>
+    </div>
+    <div class="dropdown-item" data-user-logout="true">退出当前登录</div>
+  `;
 }
 
 function bindTeamSwitcherEvents(): void {
-  safeDropdownUserList.addEventListener('click', (event) => {
-    const item = (event.target as HTMLElement).closest<HTMLElement>('[data-user-member-id]');
-    if (!item) {
+  safeDropdownUserList.addEventListener('click', async (event) => {
+    const logoutItem = (event.target as HTMLElement).closest<HTMLElement>('[data-user-logout]');
+    if (logoutItem) {
+      await logoutCurrentUser();
+      renderTeamSwitcher();
+      renderDashboardTodos();
+      returnToLoginGate();
       return;
     }
-
-    const memberId = item.dataset.userMemberId;
-    if (!memberId) {
-      return;
-    }
-
-    const targetMember = latestMembers.find((member) => member.id === memberId);
-    if (!targetMember) {
-      return;
-    }
-
-    currentUserMemberId = targetMember.id;
-    renderTeamSwitcher();
-    renderDashboardTodos();
-    safeUserDropdownMenu.classList.remove('open');
-    safeNavUserBadge.classList.remove('open');
   });
 }
 
@@ -1139,7 +1449,7 @@ function renderMeetingMemberPicker(): void {
           <input type="checkbox" value="${member.id}" data-create-meeting-member />
           <div>
             <strong>${escapeHtml(member.name)}</strong>
-            <span>${escapeHtml(member.grade)} · ${degreeTypeLabel(member.degreeType)}</span>
+            <span>${escapeHtml(member.studentId)} · ${degreeTypeLabel(member.degreeType)}</span>
           </div>
         </label>
       `,
@@ -1174,7 +1484,7 @@ function createMemberCard(member: Member): string {
       <div class="resource-meta">
         <div>
           <span>年级</span>
-          <strong>${escapeHtml(member.grade)}</strong>
+          <strong>${escapeHtml(member.studentId)}</strong>
         </div>
         <div>
           <span>培养层次</span>
@@ -1230,7 +1540,7 @@ function createMeetingCard(meeting: Meeting): string {
                   <div class="mc-checkbox-avatar" style="background:${avatarColorByMemberId(member.id)};">${escapeHtml(member.name.charAt(0))}</div>
                   <div class="mc-checkbox-info">
                     <strong>${escapeHtml(member.name)}</strong>
-                    <span>${escapeHtml(member.grade)} · ${degreeTypeLabel(member.degreeType)}</span>
+                    <span>${escapeHtml(member.studentId)} · ${degreeTypeLabel(member.degreeType)}</span>
                   </div>
                 </label>`).join('')
             : '<span class="mc-no-participants">暂无可选成员</span>'}
@@ -1325,7 +1635,7 @@ function bindMeetingEvents(): void {
 function renderMembers(searchText: string = ''): void {
   const filteredMembers = latestMembers.filter(m => 
     m.name.toLowerCase().includes(searchText.toLowerCase()) || 
-    m.grade.toLowerCase().includes(searchText.toLowerCase())
+    m.studentId.toLowerCase().includes(searchText.toLowerCase())
   );
 
   if (latestMembers.length === 0) {
@@ -1370,7 +1680,7 @@ function renderMembers(searchText: string = ''): void {
                 <span style="font-weight:500;">${escapeHtml(member.name)}</span>
               </div>
             </td>
-            <td style="padding:12px 16px; color:var(--text-main);">${escapeHtml(member.grade)}</td>
+            <td style="padding:12px 16px; color:var(--text-main);">${escapeHtml(member.studentId)}</td>
             <td style="padding:12px 16px; color:var(--text-main);">${degreeTypeLabel(member.degreeType)}</td>
             <td style="padding:12px 16px; text-align:right;">
               <button class="apple-secondary-btn small-btn" style="color:var(--danger); border-color:transparent; background:transparent;" data-delete-member-id="${member.id}" onmouseover="this.style.background='var(--danger-soft)'" onmouseout="this.style.background='transparent'">删除</button>
@@ -1409,16 +1719,39 @@ function renderMeetings(): void {
   bindMeetingEvents();
 }
 
+async function loadMemberStatus(): Promise<void> {
+  const status = await fetchJson<MemberStatusResponse>('/api/members/status');
+  hasInitializedMembers = status.hasMembers;
+}
+
 async function loadResources(): Promise<void> {
   try {
+    await loadMemberStatus();
+
+    if (!authToken) {
+      latestMembers = [];
+      latestMeetings = [];
+      renderTeamSwitcher();
+      renderAuthGate();
+      renderMeetingMemberPicker();
+      renderTaskCreateOwnerOptions();
+      renderStatusFilter();
+      renderRiskFilter();
+      renderOwnerFilter();
+      return;
+    }
+
     const [membersResponse, meetingsResponse] = await Promise.all([
       fetchJson<ListResponse<Member>>('/api/members'),
       fetchJson<ListResponse<Meeting>>('/api/meetings'),
     ]);
+    hasInitializedMembers = membersResponse.count > 0;
     latestMembers = membersResponse.items;
     latestMeetings = meetingsResponse.items;
     renderTeamSwitcher();
+    renderAuthGate();
     renderMeetingMemberPicker();
+    renderTaskCreateOwnerOptions();
     renderStatusFilter();
     renderRiskFilter();
     renderOwnerFilter();
@@ -1430,15 +1763,28 @@ async function loadResources(): Promise<void> {
     safeMemberList.textContent = `成员加载失败：${message}`;
     safeMeetingList.className = 'resource-list empty-state';
     safeMeetingList.textContent = `会议加载失败：${message}`;
+    setAuthFeedback(`加载成员失败：${message}`, 'error');
   }
+}
+
+function renderTaskCreateOwnerOptions(): void {
+  const options = ['<option value="">待指派</option>'];
+
+  [...latestMembers]
+    .sort((left, right) => left.name.localeCompare(right.name, 'zh-CN'))
+    .forEach((member) => {
+      options.push(`<option value="${escapeHtml(member.id)}">${escapeHtml(member.name)}</option>`);
+    });
+
+  safeTaskCreateOwnerInput.innerHTML = options.join('');
 }
 
 async function createMember(): Promise<void> {
   const name = safeMemberNameInput.value.trim();
-  const grade = safeMemberGradeInput.value.trim();
+  const studentId = safeMemberStudentIdInput.value.trim();
   const degreeType = safeMemberDegreeTypeInput.value as Member['degreeType'];
 
-  if (!name || !grade) {
+  if (!name || !studentId) {
     setMemberFeedback('请填写成员姓名和年级。', 'error');
     return;
   }
@@ -1448,26 +1794,99 @@ async function createMember(): Promise<void> {
     return;
   }
 
+  if (latestMembers.some(m => m.studentId === studentId)) {
+    setMemberFeedback(`年级 ${studentId} 已存在，请勿重复添加。`, 'error');
+    return;
+  }
+
   safeCreateMemberButton.disabled = true;
 
   try {
-    await fetchJson<Member>('/api/members', {
+    const createdMember = await fetchJson<CreatedMember>('/api/members', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ name, grade, degreeType }),
+      body: JSON.stringify({ name, studentId, degreeType }),
     });
     safeMemberNameInput.value = '';
-    safeMemberGradeInput.value = '';
+    safeMemberStudentIdInput.value = '';
     safeMemberDegreeTypeInput.value = 'master';
-    setMemberFeedback(`成员 ${name} 已创建。`, 'success');
+    setMemberFeedback(`成员 ${name} 已创建，初始密码为 ${createdMember.initialPassword}。请妥善保存，成员列表不会再展示密码。`, 'success');
     await loadResources();
   } catch (error) {
     const message = error instanceof Error ? error.message : '创建成员失败';
     setMemberFeedback(`创建成员失败：${message}`, 'error');
   } finally {
     safeCreateMemberButton.disabled = false;
+  }
+}
+
+async function createFirstMemberFromGate(): Promise<void> {
+  const name = safeFirstMemberNameInput.value.trim();
+  const studentId = safeFirstMemberStudentIdInput.value.trim();
+  const degreeType = safeFirstMemberDegreeTypeInput.value as Member['degreeType'];
+
+  if (!name || !studentId) {
+    setFirstMemberFeedback('请填写首位成员姓名和年级。', 'error');
+    return;
+  }
+
+  safeCreateFirstMemberButton.disabled = true;
+
+  try {
+    const createdMember = await fetchJson<CreatedMember>('/api/members', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ name, studentId, degreeType }),
+    });
+
+    setFirstMemberFeedback(`首位成员已创建，初始密码为 ${createdMember.initialPassword}，正在登录。请妥善保存，成员列表不会再展示密码。`, 'success');
+    await loginWithCredentials(createdMember.name, createdMember.initialPassword);
+    setAuthFeedback(`欢迎进入系统，当前登录账号：${createdMember.name}。`, 'success');
+    safeFirstMemberNameInput.value = '';
+    safeFirstMemberStudentIdInput.value = '';
+    safeFirstMemberDegreeTypeInput.value = 'master';
+    safeAuthStudentIdInput.value = createdMember.name;
+    safeAuthPasswordInput.value = createdMember.initialPassword;
+    await loadResources();
+    await loadBoard();
+    await loadIntakes();
+    renderDashboardTodos();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '创建首位成员失败';
+    setFirstMemberFeedback(`创建首位成员失败：${message}`, 'error');
+  } finally {
+    safeCreateFirstMemberButton.disabled = false;
+  }
+}
+
+async function submitAuthLogin(): Promise<void> {
+  const username = safeAuthStudentIdInput.value.trim();
+  const password = safeAuthPasswordInput.value.trim();
+
+  if (!username || !password) {
+    setAuthFeedback('请输入用户名和密码。', 'error');
+    return;
+  }
+
+  safeAuthLoginButton.disabled = true;
+
+  try {
+    await loginWithCredentials(username, password);
+    setAuthFeedback('登录成功，正在进入内部工作台。', 'success');
+    await loadResources();
+    await loadBoard();
+    await loadIntakes();
+    renderDashboardTodos();
+    safeAuthPasswordInput.value = '';
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '登录失败';
+    setAuthFeedback(`登录失败：${message}`, 'error');
+  } finally {
+    safeAuthLoginButton.disabled = false;
   }
 }
 
@@ -1511,6 +1930,58 @@ async function createMeeting(): Promise<void> {
   }
 }
 
+async function createTask(): Promise<void> {
+  const title = safeTaskCreateTitleInput.value.trim();
+  const description = safeTaskCreateDescriptionInput.value.trim();
+  const ownerMemberId = safeTaskCreateOwnerInput.value || null;
+  const dueDate = safeTaskCreateDueDateInput.value || null;
+  const priority = safeTaskCreatePriorityInput.value as TaskPriorityValue;
+
+  if (!title || !description) {
+    setTaskCreateFeedback('请填写任务标题和描述。', 'error');
+    return;
+  }
+
+  safeCreateTaskButton.disabled = true;
+  setTaskCreateFeedback('正在创建任务，请稍候...', 'neutral');
+
+  try {
+    const task = await fetchJson<Task>('/api/tasks', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        title,
+        description,
+        ownerMemberId,
+        dueDate,
+        priority,
+        operatorName: getCurrentUserName() || '系统操作',
+      }),
+    });
+
+    safeTaskCreateTitleInput.value = '';
+    safeTaskCreateDescriptionInput.value = '';
+    safeTaskCreateOwnerInput.value = '';
+    safeTaskCreateDueDateInput.value = '';
+    safeTaskCreatePriorityInput.value = 'medium';
+    setTaskCreateFeedback(`任务 ${task.title} 已创建。`, 'success');
+    await loadBoard(task.id);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '创建任务失败';
+    setTaskCreateFeedback(`创建任务失败：${message}`, 'error');
+  } finally {
+    safeCreateTaskButton.disabled = false;
+  }
+}
+
+async function refreshWorkspaceBoardView(preferredTaskId?: string | null): Promise<void> {
+  if (latestWorkspaceBoardData) {
+    await renderBoardView(filterBoard(latestWorkspaceBoardData), preferredTaskId ?? selectedTaskId);
+  }
+}
+
 function renderStatusFilter(): void {
   const currentStatus = boardFilters.status;
   const statusLabels: Record<string, string> = {
@@ -1549,9 +2020,7 @@ function renderStatusFilter(): void {
         boardFilters.status = val;
         safeStatusDropdownMenu.classList.remove('open');
         renderStatusFilter();
-        if (latestBoardData) {
-          await renderBoardView(filterBoard(latestBoardData));
-        }
+        await refreshWorkspaceBoardView();
       }
     });
   });
@@ -1595,9 +2064,7 @@ function renderRiskFilter(): void {
         boardFilters.risk = val;
         safeRiskDropdownMenu.classList.remove('open');
         renderRiskFilter();
-        if (latestBoardData) {
-          await renderBoardView(filterBoard(latestBoardData));
-        }
+        await refreshWorkspaceBoardView();
       }
     });
   });
@@ -1648,9 +2115,7 @@ function renderOwnerFilter(): void {
         boardFilters.ownerName = val;
         safeOwnerDropdownMenu.classList.remove('open');
         renderOwnerFilter();
-        if (latestBoardData) {
-          await renderBoardView(filterBoard(latestBoardData));
-        }
+        await refreshWorkspaceBoardView();
       }
     });
   });
@@ -2023,18 +2488,27 @@ function bindBoardEvents(columns: BoardColumn[]): void {
 }
 async function loadBoard(preferredTaskId?: string | null): Promise<void> {
   try {
-    const [board, stats] = await Promise.all([
+    const [board, taskList] = await Promise.all([
       fetchJson<BoardResponse>('/api/board'),
-      fetchJson<BoardStats>('/api/board/stats'),
+      fetchJson<TaskListResponse>(buildTaskQueryPath()),
     ]);
     latestBoardData = board;
-    latestBoardStats = stats;
-    await renderBoardView(filterBoard(latestBoardData), preferredTaskId);
+    latestBoardStats = board.stats;
+    latestWorkspaceBoardData = buildBoardFromTasks(taskList.items);
+    await renderBoardView(filterBoard(latestWorkspaceBoardData), preferredTaskId);
   } catch (error) {
     const message = error instanceof Error ? error.message : '未知错误';
     safeBoardColumns.innerHTML = `<div class="column-empty">加载失败：${message}</div>`;
     safeTaskDetail.textContent = '无法加载任务详情。';
   }
+}
+
+async function initializeApp(): Promise<void> {
+  await restoreAuthSession();
+  loadSamplePayload();
+  await loadResources();
+  await loadBoard();
+  await loadIntakes();
 }
 
 safeRefreshButton.addEventListener('click', async () => {
@@ -2067,10 +2541,35 @@ safeResetFiltersButton.addEventListener('click', async () => {
   renderStatusFilter();
   renderRiskFilter();
   renderOwnerFilter();
+  await refreshWorkspaceBoardView(selectedTaskId);
+});
 
-  if (latestBoardData) {
-    await renderBoardView(filterBoard(latestBoardData), selectedTaskId);
+safeToggleTaskCreateButton.addEventListener('click', () => {
+  const isOpen = safeTaskCreatePanel.classList.toggle('open');
+  safeToggleTaskCreateButton.textContent = isOpen ? '收起新建' : '新建任务';
+});
+
+safeTaskSearchInput.addEventListener('input', () => {
+  taskQueryState.keyword = safeTaskSearchInput.value;
+
+  if (taskSearchDebounceTimer) {
+    clearTimeout(taskSearchDebounceTimer);
   }
+
+  taskSearchDebounceTimer = setTimeout(() => {
+    void loadBoard(selectedTaskId);
+  }, 220);
+});
+
+safeTaskSortInput.addEventListener('change', async () => {
+  const [sortBy, sortOrder] = safeTaskSortInput.value.split(':') as [TaskSortField, TaskQueryState['sortOrder']];
+  taskQueryState.sortBy = sortBy;
+  taskQueryState.sortOrder = sortOrder;
+  await loadBoard(selectedTaskId);
+});
+
+safeCreateTaskButton.addEventListener('click', async () => {
+  await createTask();
 });
 
 safeLoadSampleButton.addEventListener('click', () => {
@@ -2106,8 +2605,22 @@ safeRefreshMeetingsButton.addEventListener('click', async () => {
   await loadResources();
 });
 
+safeAuthLoginForm.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  await submitAuthLogin();
+});
+
+safeAuthPasswordToggle.addEventListener('click', () => {
+  setAuthPasswordVisible(safeAuthPasswordInput.type === 'password');
+});
+
 safeCreateMemberButton.addEventListener('click', async () => {
   await createMember();
+});
+
+safeFirstMemberForm.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  await createFirstMemberFromGate();
 });
 
 safeCreateMeetingButton.addEventListener('click', async () => {
@@ -2119,10 +2632,7 @@ safeClearMeetingMembersButton.addEventListener('click', () => {
 });
 
 bindTeamSwitcherEvents();
-loadSamplePayload();
-void loadBoard();
-void loadResources();
-void loadIntakes();
+void initializeApp();
 
 document.addEventListener('click', () => {
   document.querySelectorAll<HTMLElement>('[data-owner-pill][data-open="true"]').forEach((p) => { p.dataset.open = 'false'; });

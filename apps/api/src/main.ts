@@ -1,9 +1,12 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { URL } from 'node:url';
 
-import { HttpError } from './errors';
+import { HttpError, UnauthorizedError } from './errors';
 import type { RequestLike, ResponseLike, RouteDefinition } from './http';
 import { createSqliteDatabaseClient } from './db/sqlite-client';
+import { AuthController } from './modules/auth/auth.controller';
+import { createAuthRoutes } from './modules/auth/auth.routes';
+import { AuthService } from './modules/auth/auth.service';
 import { MeetingController } from './modules/meeting/meeting.controller';
 import { createMeetingRoutes } from './modules/meeting/meeting.routes';
 import { MeetingService } from './modules/meeting/meeting.service';
@@ -21,7 +24,7 @@ const JSON_HEADERS = {
   'Content-Type': 'application/json; charset=utf-8',
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET,POST,PATCH,DELETE,OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type',
+  'Access-Control-Allow-Headers': 'Content-Type,Authorization,X-Session-Token',
 };
 
 class HttpResponseAdapter implements ResponseLike {
@@ -71,12 +74,32 @@ function createRequestLike(
   body: unknown,
   url: URL,
   route: RouteDefinition,
+  headers: Record<string, string | undefined>,
+  auth?: RequestLike['auth'],
 ): RequestLike {
   return {
     body,
     query: createQueryObject(url),
     params: route.getParams ? route.getParams(pathname) : {},
+    headers,
+    auth,
   };
+}
+
+function normalizeHeaders(request: IncomingMessage): Record<string, string | undefined> {
+  return Object.entries(request.headers).reduce<Record<string, string | undefined>>((accumulator, [key, value]) => {
+    accumulator[key] = Array.isArray(value) ? value[0] : value;
+    return accumulator;
+  }, {});
+}
+
+function resolveAuthToken(headers: Record<string, string | undefined>): string | undefined {
+  const authorizationHeader = headers.authorization;
+  if (authorizationHeader?.startsWith('Bearer ')) {
+    return authorizationHeader.slice('Bearer '.length).trim();
+  }
+
+  return headers['x-session-token'];
 }
 
 function sendJson(response: ServerResponse, statusCode: number, payload: unknown): void {
@@ -86,15 +109,18 @@ function sendJson(response: ServerResponse, statusCode: number, payload: unknown
 
 async function bootstrap(): Promise<void> {
   const databaseClient = createSqliteDatabaseClient();
+  const authService = new AuthService(databaseClient);
   const taskService = new TaskService(databaseClient);
   const memberService = new MemberService(databaseClient);
   const meetingService = new MeetingService(databaseClient);
   const intakeService = new IntakeService(databaseClient, taskService);
+  const authController = new AuthController(authService);
   const taskController = new TaskController(taskService);
   const memberController = new MemberController(memberService);
   const meetingController = new MeetingController(meetingService);
   const intakeController = new IntakeController(intakeService);
   const routes = [
+    ...createAuthRoutes(authController),
     ...createTaskRoutes(taskController),
     ...createMemberRoutes(memberController),
     ...createMeetingRoutes(meetingController),
@@ -117,6 +143,7 @@ async function bootstrap(): Promise<void> {
 
     const url = new URL(request.url, `http://${request.headers.host ?? 'localhost'}`);
     const pathname = url.pathname;
+  const headers = normalizeHeaders(request);
 
     if (request.method === 'GET' && pathname === '/health') {
       sendJson(response, 200, {
@@ -137,10 +164,17 @@ async function bootstrap(): Promise<void> {
     }
 
     try {
+      const authToken = resolveAuthToken(headers);
+      const auth = authToken ? await authService.getAuthenticatedUserByToken(authToken) : undefined;
+
+      if (route.requireAuth && !auth) {
+        throw new UnauthorizedError('请先登录后再执行该操作。');
+      }
+
       const body = request.method === 'POST' || request.method === 'PATCH' || request.method === 'DELETE'
         ? await readJsonBody(request)
         : {};
-      const requestLike = createRequestLike(pathname, body, url, route);
+      const requestLike = createRequestLike(pathname, body, url, route, headers, auth);
       const responseLike = new HttpResponseAdapter(response);
 
       await route.handler(requestLike, responseLike);
@@ -154,7 +188,8 @@ async function bootstrap(): Promise<void> {
   server.listen(port, host, () => {
     console.log(`Meeting2Action API listening on http://${host}:${port}`);
     console.log('Health check: GET /health');
-    console.log('Task routes: POST /api/tasks/import-from-action-items, GET /api/tasks, GET /api/tasks/:id, PATCH /api/tasks/:id, GET /api/tasks/:id/activity');
+    console.log('Auth routes: POST /api/auth/login, POST /api/auth/logout, GET /api/users/me');
+    console.log('Task routes: POST /api/tasks, POST /api/tasks/import-from-action-items, GET /api/tasks, GET /api/tasks/:id, PATCH /api/tasks/:id, GET /api/tasks/:id/activity');
     console.log('Board routes: GET /api/board, GET /api/board/stats');
     console.log('Member routes: GET /api/members, GET /api/members/:id, POST /api/members, PATCH /api/members/:id, DELETE /api/members/:id');
     console.log('Meeting routes: GET /api/meetings, GET /api/meetings/:id, GET /api/meetings/:id/participants, POST /api/meetings, PATCH /api/meetings/:id, PATCH /api/meetings/:id/participants, DELETE /api/meetings/:id');

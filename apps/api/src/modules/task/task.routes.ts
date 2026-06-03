@@ -5,8 +5,15 @@ export function createTaskRoutes(taskController: TaskController): RouteDefinitio
   return [
     {
       method: 'POST',
+      pattern: /^\/api\/tasks$/,
+      handler: taskController.createTask,
+      requireAuth: true,
+    },
+    {
+      method: 'POST',
       pattern: /^\/api\/tasks\/import-from-action-items$/,
       handler: taskController.importFromActionItems,
+      requireAuth: true,
     },
     {
       method: 'GET',
@@ -35,6 +42,7 @@ export function createTaskRoutes(taskController: TaskController): RouteDefinitio
       method: 'PATCH',
       pattern: /^\/api\/tasks\/([^/]+)$/,
       handler: taskController.updateTask,
+      requireAuth: true,
       getParams: (pathname) => {
         const match = pathname.match(/^\/api\/tasks\/([^/]+)$/);
         return { id: match?.[1] ?? '' };
@@ -44,6 +52,7 @@ export function createTaskRoutes(taskController: TaskController): RouteDefinitio
       method: 'DELETE',
       pattern: /^\/api\/tasks\/([^/]+)$/,
       handler: taskController.deleteTask,
+      requireAuth: true,
       getParams: (pathname) => {
         const match = pathname.match(/^\/api\/tasks\/([^/]+)$/);
         return { id: match?.[1] ?? '' };
